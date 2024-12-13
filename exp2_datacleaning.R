@@ -199,8 +199,8 @@ df_cc <- df_full %>%
 df_pm <- df_full %>%
   filter(section_id == "M") %>%
   dplyr::rename(time = misc_key.started) %>% 
-  mutate(block_num = case_when(section_id == "M" ~ block_num + 1, 
-                               TRUE ~ block_num)) %>% 
+  mutate(block_num = case_when(section_id == "M" ~ block_num + 1,
+                               TRUE ~ block_num)) %>%
   dplyr::select(participant, block_num, accessed_pm, start_time, time) %>% 
   # accessed pm is written in first line of next block and needs to be moved up
   mutate_at(c("accessed_pm"), list(lead), n = 1 ) %>% 
