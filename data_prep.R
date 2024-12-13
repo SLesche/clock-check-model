@@ -35,4 +35,5 @@ data_clean <- data_clean %>%
   ) %>% 
   mutate(
     time_since_last_cc = ifelse(is.na(time_since_last_cc), time_since_start, time_since_last_cc)
-  )
+  ) %>% 
+  mutate(time_since_last_cc = ifelse(time_since_last_cc == 0, lag(time_since_last_cc), time_since_last_cc))
