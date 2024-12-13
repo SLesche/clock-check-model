@@ -10,14 +10,11 @@ rm(list = ls())
 # which packages
 search()
 
-# set working directory 
-setwd(dirname(rstudioapi::getSourceEditorContext()$path))
-getwd()
 # get data
 path <- getwd()
 
 # get data 
-df_full <- read.csv("data_experiment2_uncleaned")
+df_full <- read.csv("data_experiment2_uncleaned.csv")
 
 df_ot_acc <- df_full %>%
   # fill so that they are not deleted later 
