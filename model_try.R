@@ -26,6 +26,7 @@ fit <- sampling(
   chains = 1,   # Number of MCMC chains
   warmup = 500, # Number of warmup iterations
 )
+saveRDS(fit, "init_fit")
 
 # Check convergence with traceplots
 traceplot(fit)
