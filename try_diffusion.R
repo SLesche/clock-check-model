@@ -35,13 +35,13 @@ stan_data <- list(
   N = nrow(data),  # Number of events per participant
   id = data$participant,
   block_id = data$block_num + 1,
-  observed_time = data$time_since_last_cc,
-  known_t_to_target = data$known_t_to_target
+  observed_time = data$time_since_last_cc / data$block_duration,
+  known_t_to_target = data$known_t_to_target / data$block_duration
 )
 
 # Fit the model
 fit <- stan(
-  file = "diffusion_model.stan",
+  file = "diffusion_variable_theta.stan",
   data = stan_data,
   iter = 2000,  # Number of iterations
   chains = 1,   # Number of MCMC chains
@@ -61,7 +61,7 @@ posterior_samples <- extract(fit)
 sigma_0_samples <- posterior_samples$sigma_0
 k_samples <- posterior_samples$k
 threshold_samples <- posterior_samples$theta
-t_target_samples <- data$known_t_to_target  # the target times for each observation
+t_target_samples <- data$known_t_to_target / data$block_duration  # the target times for each observation
 
 # Number of posterior samples
 N_simulations <- 100
@@ -94,7 +94,7 @@ simulated_long <- data.frame(
 
 # Add the observed data to the dataframe
 observed_data <- data.frame(
-  time = data$time_since_last_cc,
+  time = data$time_since_last_cc / data$block_duration,
   type = "Observed"
 )
 
