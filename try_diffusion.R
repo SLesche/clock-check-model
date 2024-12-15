@@ -7,6 +7,26 @@ get_t_predicted <- function(t_target, sigma_0, k, threshold){
   return(t_pred)
 }
 
+get_pred_ratio <- function(sigma, k, threshold){
+  ratio = 1 / (qnorm(1-threshold) * sigma * k + 1)
+  return(ratio)
+}
+
+simulate_blockwise_behavior <- function(t_total, sigma_0, k, threshold){
+  check_times = c()
+  t_start = 0
+  delta = 30
+  while (t_start < t_total - delta) {
+    t_pred = get_t_predicted(t_total - t_start, sigma_0, k, threshold)
+    t_check = t_start + t_pred
+    check_times = c(check_times, t_check)
+    
+    t_start = t_check
+  }
+  
+  return(check_times)
+}
+
 data <- read.csv("diffusion_data.csv")
 
 stan_data <- list(

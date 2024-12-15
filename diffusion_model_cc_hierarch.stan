@@ -1,65 +1,62 @@
+functions {
+  real get_predicted_time(real t_target, real sigma_0, real k, real theta) {
+    real alpha = inv_Phi(1 - theta); // Inverse CDF of normal for the threshold
+    real pred_clock_check_time = t_target / (1 + alpha * sigma_0 * k); // Predicted time for the clock check
+    return(pred_clock_check_time);
+  }
+}
+
 data {
-  int<lower=0> N; // number of checking events
-  int<lower=1> Nsubj; // number of subjects
-  int<lower=1, upper=Nsubj> id[N]; // Subject ID for each trial
-  real<lower=0> known_t_to_target[N]; // the time of target
-  real<lower=0> observed_time[N]; // the time of the actual clock check
+  int<lower=0> N; // Number of checking events
+  int<lower=1> P; // Number of persons
+  int<lower=1, upper=P> person_id[N]; // Person ID for each observation
+  real<lower=0> known_t_to_target[N]; // Time to target
+  real<lower=0> observed_time[N]; // Observed time of the actual clock check
 }
 
 parameters {
-  real<lower=0> k_mu; // Mean noise scalar k (population level)
-  real<lower=0> sigma_k; // Std dev of noise scalar k (population level)
-  real<lower=0> sigma_0_mu; // Mean initial noise sigma_0 (population level)
-  real<lower=0> sigma_sigma_0; // Std dev of initial noise sigma_0 (population level)
-  real<lower=0, upper=1> theta_mu; // Mean threshold (population level)
-  real<lower=0, upper=1> sigma_theta; // Std dev of threshold (population level)
+  // Group-level parameters
+  real<lower=0> mu_k; // Group mean for k
+  real<lower=0> mu_sigma_0; // Group mean for sigma_0
+  real<lower=0, upper=1> mu_theta; // Group mean for theta
   
-  real<lower=0> k[Nsubj]; // Subject-specific noise scalar k
-  real<lower=0> sigma_0[Nsubj]; // Subject-specific initial noise sigma_0
-  real<lower=0, upper=1> theta[Nsubj]; // Subject-specific threshold
+  real<lower=0> sigma_k; // Standard deviation for k
+  real<lower=0> sigma_sigma_0; // Standard deviation for sigma_0
+  real<lower=0> sigma_theta; // Standard deviation for theta
+  real<lower=0> sigma_err; // Error of prediction
   
+  // Person-level parameters
+  vector<lower=0>[P] k; // Person-specific k
+  vector<lower=0>[P] sigma_0; // Person-specific sigma_0
+  vector<lower=0, upper=1>[P] theta; // Person-specific theta
 }
 
 model {
-  // Priors for population-level parameters
-  k_mu ~ normal(1, 0.5);
-  sigma_k ~ normal(0, 1);
-  sigma_0_mu ~ gamma(1, 1);
-  sigma_sigma_0 ~ gamma(1, 1);
-  theta_mu ~ beta(1, 1);
-  sigma_theta ~ gamma(1, 1);
+  // Priors for group-level parameters
+  mu_k ~ normal(1, 0.5);
+  mu_sigma_0 ~ gamma(1, 1);
+  mu_theta ~ beta(1, 1);
   
-  // Priors for subject-level parameters
-  for (id in 1:Nsubj) {
-    k[id] ~ normal(k_mu, sigma_k);
-    sigma_0[id] ~ normal(sigma_0_mu, sigma_sigma_0);
-    theta[id] ~ normal(theta_mu, sigma_theta);
-  }
+  sigma_k ~ gamma(1, 1);
+  sigma_sigma_0 ~ gamma(1, 1);
+  sigma_theta ~ uniform(0, 1);
+  
+  sigma_err ~ gamma(1, 1);
 
-  // Likelihood for each subject's trials
+  // Priors for person-level parameters
+  k ~ normal(mu_k, sigma_k);
+  sigma_0 ~ normal(mu_sigma_0, sigma_sigma_0);
+  theta ~ normal(mu_theta, sigma_theta);
+  
+  // Likelihood for observations
   for (i in 1:N) {
-    int sub_id = id[i];  // get the subject ID for trial i
-    real t = known_t_to_target[i];
-    real pred_clock_check_time = 0;
+    real pred_clock_check_time = get_predicted_time(
+      known_t_to_target[i], 
+      sigma_0[person_id[i]], 
+      k[person_id[i]], 
+      theta[person_id[i]]
+    );
     
-    real t_step = 1;
-    real t_step_size = 1;
-    
-    // Simulate the accumulation process for each subject
-    while (t_step < t) {
-      real noise = sigma_0[sub_id] * k[sub_id] * t_step;  // Noise increases with time
-      
-      real prob_included = 1 - normal_cdf(known_t_to_target[i], t_step, noise);
-      
-      // Check if threshold is crossed
-      if (prob_included >= theta[sub_id]) {
-        pred_clock_check_time = t_step;
-        break;
-      }
-      t_step = t_step + t_step_size;
-    }
-    
-    // Likelihood of the observed response time for each subject
-    observed_time[i] ~ normal(pred_clock_check_time, sigma_0[sub_id]);
+    observed_time[i] ~ normal(pred_clock_check_time, sigma_err);
   }
 }

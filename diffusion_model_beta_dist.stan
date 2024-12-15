@@ -1,7 +1,13 @@
+functions {
+  real get_predicted_time(real t_target, real sigma_0, real k, real theta){
+    real alpha = inv_Phi(1 - theta); // Inverse CDF of normal for the threshold
+    real pred_clock_check_time = t_target / (1 + alpha * sigma_0 * k); // Predicted time for the clock check
+  }
+}
 data {
   int<lower=0> N; // number of checking events
   real<lower=0> known_t_to_target[N]; // the time of target
-  real<lower=0> observed_time[N]; // the time of the actual clock check
+  real<lower=0> ratio[N]; // the time of the actual clock checke relative to target_time
 }
 
 parameters {
@@ -13,10 +19,9 @@ parameters {
 }
 
 transformed parameters {
-  real alpha_ratio = mu_ratio * ((mu_ratio * (1 - mu_ratio)) / (sigma_ratio^2) - 1);
-  real beta_ratio = (1 - mu_ratio) * ((mu_ratio * (1 - mu_ratio)) / (sigma_ratio^2) - 1);
+  real alpha_ratio = mu_ratio^2 * (((1 - mu_ratio) / sigma_ratio^2) - 1 / mu_ratio);
+  real beta_ratio = alpha_ratio * ((1 / mu_ratio) - 1);
 
-  real alpha = inv_Phi(1 - theta); // Inverse CDF of normal for the threshold
 }
 
 model {
@@ -29,17 +34,9 @@ model {
   mu_ratio ~ beta(1, 1); // Beta distribution for the mean of the ratio
   sigma_ratio ~ uniform(0, 1);  // Standard deviation must be between 0 and 1
 
-  // Compute the predicted clock check time
-  real pred_clock_check_time;
 
   for (i in 1:N) {
-    real t = known_t_to_target[i];
-    pred_clock_check_time = t / (1 + alpha * sigma_0 * k); // Predicted time for the clock check
-    
-    // Compute the ratio (observed_time / target_time)
-    real ratio = observed_time[i] / known_t_to_target[i];
-
     // Likelihood: Beta distribution for the ratio
-    ratio ~ beta(alpha_ratio, beta_ratio); // Beta distribution for the ratio between 0 and 1
+    ratio[i] ~ beta(alpha_ratio, beta_ratio); // Beta distribution for the ratio between 0 and 1
   }
 }
