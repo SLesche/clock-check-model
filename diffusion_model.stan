@@ -25,9 +25,10 @@ model {
     real t = known_t_to_target[i];
     
     // Compute the predicted clock check time using the derived formula
-    real pred_clock_check_time = t / (1 - alpha * sigma_0 * k); // Formula for t_step
+    real pred_clock_check_time = t / (1 + alpha * sigma_0 * k); // Formula for t_step
     
     // Likelihood of the observed response time
     observed_time[i] ~ normal(pred_clock_check_time, sigma_0);
   }
 }
+
