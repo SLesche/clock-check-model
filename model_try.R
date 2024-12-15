@@ -10,23 +10,17 @@ stan_data <- list(
   id = data$id,
   t_since_last_check = data$t_since_last_check / 300,
   known_t_to_target = data$known_t_to_target / 300,
-  check = data$check,
-  delta = 30  # Margin of error
+  check = data$check
 )
 
-# Compile the Stan model
-stan_model_code <- "stan_try.stan"
-stan_model <- stan_model(file = stan_model_code)
-
 # Fit the model
-fit <- sampling(
-  object = stan_model,
+fit <- stan(
+  file = "simple_linear.stan",
   data = stan_data,
   iter = 2000,  # Number of iterations
   chains = 1,   # Number of MCMC chains
   warmup = 500, # Number of warmup iterations
 )
-saveRDS(fit, "init_fit")
 
 # Check convergence with traceplots
 traceplot(fit)

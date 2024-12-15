@@ -5,7 +5,7 @@ library(data.table)
 data <- fread("data_experiment2_uncleaned.csv")
 
 # create df for pm per block 
-df_pm <- df_full %>%
+df_pm <- data %>%
   filter(section_id == "M") %>%
   dplyr::rename(time = misc_key.started) %>% 
   mutate(block_num = case_when(section_id == "M" ~ block_num + 1,
@@ -90,6 +90,8 @@ data_clean <- data_clean %>%
   # mutate(rel_time_since_last_cc = time_since_last_cc / known_t_to_target)
   ungroup()
 
+write.csv(data_clean, "data_clean.csv")
+
 data_model <- data_clean %>% 
   filter(accessed_pm == 1) %>% 
   rename(
@@ -103,4 +105,26 @@ data_model <- data_clean %>%
   na.omit() %>% 
   mutate(id = dense_rank(id))
 
-write.csv(data_model, "cleaned_data.csv")
+write.csv(data_model, "data_model.csv")
+
+data_hazard_model <- data_clean %>% 
+  filter(accessed_pm == 1, (clock_check == 1) | time_since_start == 0) %>% 
+  select(
+    participant, block_num, time_since_start, time_to_end, block_duration
+  ) %>% 
+  filter(time_to_end != 0) %>% 
+  na.omit() %>% 
+  mutate(participant = dense_rank(participant))
+
+write.csv(data_hazard_model, "hazard_data.csv")
+
+data_diffusion_model <- data_clean %>% 
+  filter(accessed_pm == 1, clock_check == 1) %>% 
+  select(
+    participant, block_num, known_t_to_target, cc_time, time_since_start, time_to_end, time_since_last_cc, block_duration
+  ) %>% 
+  filter(time_to_end != 0) %>% 
+  na.omit() %>% 
+  mutate(participant = dense_rank(participant))
+
+write.csv(data_diffusion_model, "diffusion_data.csv")

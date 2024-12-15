@@ -56,11 +56,11 @@ model {
   }
 }
 
-generated quantities {
-  int<lower=0, upper=1> y_rep[N];  // Simulated clock checks
-
-  // Simulate clock-checking behavior based on the predicted probabilities
-  for (itrial in 1:N) {
-    y_rep[itrial] = bernoulli_rng(prob_check[itrial]);  // Correct use of bernoulli_rng
-  }
-}
+// generated quantities {
+//   int<lower=0, upper=1> y_rep[N];  // Simulated clock checks
+// 
+//   // Simulate clock-checking behavior based on the predicted probabilities
+//   for (itrial in 1:N) {
+//     y_rep[itrial] = bernoulli_rng(prob_check[itrial]);  // Correct use of bernoulli_rng
+//   }
+// }
