@@ -18,11 +18,11 @@ parameters {
   // Group-level parameters
   real<lower=0> mu_k; // Group mean for k
   real<lower=0> mu_sigma_0; // Group mean for sigma_0
-  real<lower=0, upper=1> mu_theta; // Group mean for theta
+  real<lower=0, upper=1> mu_theta_raw; // Group mean for theta
   
   real<lower=0> sigma_k; // Standard deviation for k
   real<lower=0> sigma_sigma_0; // Standard deviation for sigma_0
-  real<lower=0> sigma_theta; // Standard deviation for theta
+  real<lower=0, upper = 1> sigma_theta_raw; // Standard deviation for theta
   real<lower=0> sigma_err; // Error of prediction
   
   // Person-level parameters
@@ -31,15 +31,23 @@ parameters {
   vector<lower=0, upper=1>[P] theta; // Person-specific theta
 }
 
+transformed parameters {
+  real <lower=0, upper=0.5> mu_theta;
+  mu_theta = mu_theta_raw / 2;
+  
+  real <lower=0, upper = 0.5> sigma_theta;
+  sigma_theta = sigma_theta_raw / 2;
+}
+
 model {
   // Priors for group-level parameters
   mu_k ~ normal(1, 0.5);
   mu_sigma_0 ~ gamma(1, 1);
-  mu_theta ~ beta(1, 1);
+  mu_theta_raw ~ beta(1, 1);
   
   sigma_k ~ gamma(1, 1);
   sigma_sigma_0 ~ gamma(1, 1);
-  sigma_theta ~ uniform(0, 1);
+  sigma_theta_raw ~ uniform(0, 1);
   
   sigma_err ~ gamma(1, 1);
 
