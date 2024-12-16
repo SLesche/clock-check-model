@@ -30,12 +30,13 @@ simulate_blockwise_behavior <- function(t_total, sigma_0, k, threshold){
 
 data <- read.csv("diffusion_data.csv") %>% 
   filter(known_t_to_target != 0, time_since_last_cc != 0)
+  # filter(known_t_to_target / block_duration == 1)
 
 stan_data <- list(
   Nsubj = length(unique(data$participant)),  # Number of participants
   Nblocks = max(unique(data$block_num)) + 1,
   N = nrow(data),  # Number of events per participant
-  person_id = data$participant,
+  subject_id = data$participant,
   P = length(unique(data$participant)),
   block_id = data$block_num + 1,
   observed_time = data$time_since_last_cc / data$block_duration,
@@ -50,6 +51,19 @@ fit <- stan(
   iter = 2000,  # Number of iterations
   chains = 1,   # Number of MCMC chains
   warmup = 500, # Number of warmup iterations
+  # init = list(
+  #   list(
+  #     # Priors
+  #     mu_k = rnorm(1, 1, 0.5),
+  #     sigma_k = rgamma(1, 1, 1),
+  #     mu_sigma_0 = rgamma(1, 1, 1),
+  #     sigma_sigma_0 = rgamma(1, 1, 1),
+  #     mu_raw_theta = runif(1, 0, 0.8),
+  #     sigma_raw_theta = runif(1, 0, 0.2),
+  #     mu_sigma_err = rbeta(1, 2, 6),
+  #     sigma_sigma_err = rbeta(1, 2, 10)
+  #   )
+  # )
 )
 
 # R-hat statistics
@@ -136,3 +150,4 @@ combined_data %>%
        y = "Density") +
   scale_color_manual(values = c("Observed" = "red", "Simulated" = "blue")) +
   theme_minimal()
+
