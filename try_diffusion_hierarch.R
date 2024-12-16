@@ -21,7 +21,8 @@ simulate_blockwise_behavior <- function(t_total, sigma_0, k, threshold){
   return(check_times)
 }
 
-data <- read.csv("diffusion_data.csv")
+data <- read.csv("diffusion_data.csv") %>% 
+  filter(known_t_to_target != 0, time_since_last_cc != 0)
 
 stan_data <- list(
   Nsubj = length(unique(data$participant)),  # Number of participants
@@ -54,9 +55,10 @@ traceplot(fit)
 posterior_samples <- extract(fit)
 
 # Posterior samples for subject-specific parameters
-sigma_0_subject_samples <- posterior_samples$sigma_0_subject
-k_subject_samples <- posterior_samples$k_subject
-theta_subject_samples <- posterior_samples$theta_subject
+sigma_0_samples <- posterior_samples$sigma_0
+k_samples <- posterior_samples$k
+theta_samples <- posterior_samples$theta
+sigma_err_samples <- posterior_samples$sigma_err
 
 # Extract data-related variables
 subject_ids <- data$subject_id
@@ -74,13 +76,14 @@ for (i in 1:N_simulations) {
   for (j in 1:length(t_target_samples)) {
     # Get the subject-specific posterior samples for the current iteration
     subject_id <- subject_ids[j]
-    sigma_0_sample <- sigma_0_subject_samples[i, subject_id]
-    k_sample <- k_subject_samples[i, subject_id]
-    theta_sample <- theta_subject_samples[i, subject_id]
+    sigma_0_sample <- sigma_0_samples[i]
+    k_sample <- k_samples[i]
+    theta_sample <- theta_samples[i]
     t_target_sample <- t_target_samples[j]
+    sigma_err_sample <- sigma_err_samples[i]
     
     # Get the predicted response time
-    simulated_data[i, j] <- t_target_sample / (1 + theta_sample * sigma_0_sample * k_sample)
+    simulated_data[i, j] <- rnorm(1, get_pred_ratio(sigma_0_sample, k_sample, theta_sample), sigma_err_sample)
   }
 }
 
@@ -89,14 +92,14 @@ library(ggplot2)
 
 # Convert simulated data to a long format for ggplot
 simulated_long <- data.frame(
-  time = as.vector(simulated_data),
+  ratio = as.vector(simulated_data),
   target_time = rep(t_target_samples, N_simulations),
   type = "Simulated"
 )
 
 # Add the observed data to the dataframe
 observed_data <- data.frame(
-  time = data$time_since_last_cc / data$block_duration,
+  ratio = data$time_since_last_cc / data$known_t_to_target,
   target_time = data$known_t_to_target / data$block_duration,
   type = "Observed"
 )
@@ -109,8 +112,8 @@ combined_data <- rbind(
 
 # Plot the comparison
 combined_data %>%
-  filter(target_time == 1) %>%
-  ggplot(aes(x = time)) +
+  # filter(target_time == 1) %>%
+  ggplot(aes(x = ratio)) +
   geom_histogram(aes(y = ..density..), bins = 30, alpha = 0.5, position = "identity", fill = "blue") +
   geom_density(aes(color = type), size = 1) +
   labs(title = "Posterior Predictive Check: Observed vs Simulated",
