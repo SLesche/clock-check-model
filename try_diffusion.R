@@ -7,6 +7,11 @@ get_t_predicted <- function(t_target, sigma_0, k, threshold){
   return(t_pred)
 }
 
+get_t_predicted <- function(t_target, sigma_0, k, threshold, threshold_growth){
+  t_pred = t_target / (1 + qnorm(1 - (threshold + threshold_growth *t_target)) * sigma_0 * k)
+  
+  return(t_pred)
+}
 get_pred_ratio <- function(sigma, k, threshold){
   ratio = 1 / (qnorm(1-threshold) * sigma * k + 1)
   return(ratio)
@@ -41,7 +46,7 @@ stan_data <- list(
 
 # Fit the model
 fit <- stan(
-  file = "diffusion_variable_theta.stan",
+  file = "diffusion_model.stan",
   data = stan_data,
   iter = 2000,  # Number of iterations
   chains = 1,   # Number of MCMC chains
@@ -61,6 +66,7 @@ posterior_samples <- extract(fit)
 sigma_0_samples <- posterior_samples$sigma_0
 k_samples <- posterior_samples$k
 threshold_samples <- posterior_samples$theta
+# threshold_growth_samples <- posterior_samples$theta_rate
 t_target_samples <- data$known_t_to_target / data$block_duration  # the target times for each observation
 
 # Number of posterior samples
@@ -77,6 +83,7 @@ for (i in 1:N_simulations) {
     k_sample <- k_samples[i]
     threshold_sample <- threshold_samples[i]
     t_target_sample <- t_target_samples[j]
+    threshold_growth_sample <- threshold_growth_samples[i]
     
     # Get the predicted response time
     simulated_data[i, j] <- get_t_predicted(t_target_sample, sigma_0_sample, k_sample, threshold_sample)
@@ -89,12 +96,14 @@ library(ggplot2)
 # Convert simulated data to a long format for ggplot
 simulated_long <- data.frame(
   time = as.vector(simulated_data),
+  target_time = data$known_t_to_target / data$block_duration,
   type = "Simulated"
 )
 
 # Add the observed data to the dataframe
 observed_data <- data.frame(
   time = data$time_since_last_cc / data$block_duration,
+  target_time = data$known_t_to_target / data$block_duration,
   type = "Observed"
 )
 
@@ -105,7 +114,9 @@ combined_data <- rbind(
 )
 
 # Plot the comparison
-ggplot(combined_data, aes(x = time)) +
+combined_data %>% 
+  filter(target_time == 1) %>%
+  ggplot(aes(x = time)) +
   geom_histogram(aes(y = ..density..), bins = 30, alpha = 0.5, position = "identity", fill = "blue") +
   geom_density(aes(color = type), size = 1) +
   labs(title = "Posterior Predictive Check: Observed vs Simulated",
