@@ -13,7 +13,7 @@ parameters {
   real<lower=0> k; // Noise scalar k
   real<lower=0> sigma_0; // Initial noise at t = 0
   real<lower=0, upper=1> raw_theta; // Threshold (raw)
-  real<lower=0> phi; // Precision parameter for Beta distribution
+  real<lower=0, upper=1> sigma_err; // Precision parameter for Beta distribution
 }
 
 transformed parameters {
@@ -28,13 +28,12 @@ model {
   k ~ normal(1, 0.5);
   sigma_0 ~ gamma(1, 1);
   raw_theta ~ beta(1, 1);
-  phi ~ gamma(2, 0.5); // Precision prior for Beta distribution (tweak as needed)
+  sigma_err ~ uniform(0, 1); // Precision prior for Beta distribution (tweak as needed)
 
   // Likelihood
-  for (i in 1:N) {
-    real pred_check_ratio = get_predicted_ratio(sigma_0, k, alpha);
-    real alpha_beta = pred_check_ratio * phi;
-    real beta_beta = (1 - pred_check_ratio) * phi;
-    observed_ratio[i] ~ beta(alpha_beta, beta_beta);
-  }
+  real pred_check_ratio = get_predicted_ratio(sigma_0, k, alpha);
+  real alpha_beta = pred_check_ratio^2 * ((1 - pred_check_ratio) / sigma_err^2 - 1 / pred_check_ratio);
+  real beta_beta = alpha_beta * (1 / pred_check_ratio - 1);
+  
+  observed_ratio ~ beta(alpha_beta, beta_beta);
 }

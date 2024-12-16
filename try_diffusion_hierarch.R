@@ -6,6 +6,13 @@ get_pred_ratio <- function(sigma, k, threshold){
   return(ratio)
 }
 
+get_alpha_beta <- function(mean, sd){
+  alpha = mean^2 * ((1 - mean) / sd^2 - 1 / mean);
+  beta = alpha * (1 / mean - 1);
+  
+  return(c(alpha, beta))
+}
+
 simulate_blockwise_behavior <- function(t_total, sigma_0, k, threshold){
   check_times = c()
   t_start = 0
@@ -83,7 +90,15 @@ for (i in 1:N_simulations) {
     sigma_err_sample <- sigma_err_samples[i]
     
     # Get the predicted response time
-    simulated_data[i, j] <- rnorm(1, get_pred_ratio(sigma_0_sample, k_sample, theta_sample), sigma_err_sample)
+    simulated_data[i, j] <- rbeta(
+      1,
+      get_alpha_beta(
+        get_pred_ratio(sigma_0_sample, k_sample, theta_sample),
+        sigma_err_sample)[1],
+      get_alpha_beta(
+        get_pred_ratio(sigma_0_sample, k_sample, theta_sample),
+        sigma_err_sample)[2]
+      )
   }
 }
 
