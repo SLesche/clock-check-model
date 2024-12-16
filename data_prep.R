@@ -48,8 +48,8 @@ df_pm <- data %>%
   mutate(block_num = block_num -1)
 
 data_clean <- data %>% 
-  dplyr::select(participant, block_num, misc_key.started, space.rt, 
-                misc_key.keys, section_id) %>% 
+  # dplyr::select(participant, block_num, misc_key.started, space.rt, 
+  #               misc_key.keys, section_id) %>% 
   left_join(., df_pm) %>% 
   filter(section_id == "M") %>%
   dplyr::rename(time = misc_key.started) %>%
