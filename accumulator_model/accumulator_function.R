@@ -11,7 +11,7 @@ check_time <- function(target_time, threshold, k, dstep) {
     i <- i + 1
     cur_time <- cur_time + dstep
     check_times[i] <- cur_time
-    cur_est_time <- rnorm(1, cur_est_time + dstep, k * cur_time)
+    cur_est_time <- rnorm(1, cur_est_time + dstep, sqrt(k) * cur_time)
     est_times[i] <- cur_est_time
   }
   
@@ -57,10 +57,10 @@ run_simulations <- function(n_simulations, target_time, threshold, k, dstep) {
 
 # Parameters
 target_time <- 300
-threshold <- 100
-k <- 0.02
+threshold <- 50
+k <- 0.01
 dstep <- 1
-n_simulations <- 1000
+n_simulations <- 500
 
 plot_time_est(check_time(target_time, threshold, k, dstep))
 
