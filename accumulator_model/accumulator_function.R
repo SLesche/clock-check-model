@@ -18,9 +18,22 @@ check_time <- function(target_time, threshold, k, dstep) {
   check_times <- check_times[1:i]
   est_times <- est_times[1:i]
   
-  list(check_times = check_times, est_times = est_times, checked = ifelse(max(check_times) < target_time, 1, 0))
+  list(check_times = check_times, 
+       est_times = est_times, 
+       checked = ifelse(max(check_times) < target_time, 1, 0),
+       params = list(
+         target_time = target_time,
+         threshold = threshold, 
+         k = k, 
+         dstep = dstep
+       ))
 }
 
+plot_time_est <- function(result){
+  plot(result$check_times, result$est_times, xlim = c(0, result$params$target_time), type = "l")
+  abline(h = result$params$target_time - result$params$threshold, col = "red", lwd = 2, lty = 2)
+  abline(a = 0, b = 1, col = "gray", lwd = 2, lty = 2)
+}
 # Run 100 simulations and track the `cur_time` when `est_time` is max
 run_simulations <- function(n_simulations, target_time, threshold, k, dstep) {
   max_times <- numeric(n_simulations)
@@ -39,15 +52,17 @@ run_simulations <- function(n_simulations, target_time, threshold, k, dstep) {
   }
   
   print(mean(checked))
-  return(max_times)
+  return(max_times[which(checked == 1)])
 }
 
 # Parameters
-target_time <- 10
-threshold <- 2
-k <- 1
-dstep <- 0.2
+target_time <- 300
+threshold <- 100
+k <- 0.02
+dstep <- 1
 n_simulations <- 1000
+
+plot_time_est(check_time(target_time, threshold, k, dstep))
 
 # Run the simulations
 max_times <- run_simulations(n_simulations, target_time, threshold, k, dstep)
