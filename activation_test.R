@@ -9,9 +9,9 @@ fit_data <- data %>%
 
 stan_data <- list(
   N = nrow(fit_data),
-  t_steps = fit_data$time_since_last_cc,
-  t_target = fit_data$known_t_to_target,
-  num_steps = 1000
+  clock_check_time = fit_data$time_since_last_cc,
+  known_t_to_target = fit_data$known_t_to_target,
+  m = 100
 )
 
 # Fit the model
