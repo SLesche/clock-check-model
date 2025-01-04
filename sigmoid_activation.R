@@ -35,9 +35,9 @@ compute_pdf <- function(t_steps, t_target, k, g, threshold, a, dstep){
 }
 
 # Example usage
-t_target <- 0.2                    # Target time
+t_target <- 7                # Target time
 t_steps <- seq(0, t_target, by = 0.01)  # Time steps from 0.1 to 10
-k <- 1                      # Scaling factor for prob_target
+k <- 1 * t_target                     # Scaling factor for prob_target
 g <- 0.1                  # Base probability for prob_action
 threshold <- 0.5       # Threshold for prob_action
 a <- 10                            # Sharpness of the sigmoid in prob_action
@@ -50,3 +50,6 @@ plot(t_steps, pdf_values, type = "l", col = "blue", lwd = 2,
      xlab = "t_step", ylab = "Probability Density",
      main = "Scaled PDF of Action Timing")
 
+
+# Define the functions
+plot(t_steps, prob_target(t_target, t_steps, k))
