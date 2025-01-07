@@ -1,11 +1,12 @@
 library(dplyr)
 library(rstan)
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
 
 data <- read.csv("archive/diffusion_data.csv")
 
 fit_data <- data %>% 
-  filter(known_t_to_target != 0, time_since_last_cc != 0) %>% 
-  filter(known_t_to_target / block_duration == 1)
+  filter(known_t_to_target != 0, time_since_last_cc != 0)
 
 stan_data <- list(
   N = nrow(fit_data),
@@ -19,7 +20,7 @@ fit <- stan(
   file = "activation_model.stan",
   data = stan_data,
   iter = 2000,  # Number of iterations
-  chains = 1,   # Number of MCMC chains
+  chains = 4,   # Number of MCMC chains
   warmup = 500, # Number of warmup iterations
   # init = list(
   #   list(
