@@ -24,6 +24,9 @@ checks <- checks %>%
   mutate(
     rate_not_checked = time_since_last_cc / known_t_to_target
   ) 
+
+checks %>%filter(known_t_to_target < 50) %>%  pull(rate_not_checked) %>% hist(breaks = 100)
+
 model <- lme4::lmer(rate_not_checked ~ known_t_to_target + (1|participant), data = checks)
 summary(model)
 

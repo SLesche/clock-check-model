@@ -21,7 +21,7 @@ fit <- stan(
   file = "activation_model.stan",
   data = stan_data,
   iter = 2000,  # Number of iterations
-  chains = 4,   # Number of MCMC chains
+  chains = 1,   # Number of MCMC chains
   warmup = 500, # Number of warmup iterations
   # init = list(
   #   list(

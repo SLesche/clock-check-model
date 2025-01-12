@@ -18,16 +18,16 @@ functions {
 
     // Loop over M intervals to compute the integral using the trapezoidal rule
     for (i in 1:m) {
-      real hazard_left = g + (1 - g) / (1 + exp(-a * (1 - normal_cdf_left[i]) - threshold));
-      real hazard_right = g + (1 - g) / (1 + exp(-a * (1 - normal_cdf_right[i]) - threshold));
+      real hazard_left = g + (1 - g) / (1 + exp(-a * (log((1 - normal_cdf_left[i]) / normal_cdf_left[i]) + threshold)));
+      real hazard_right = g + (1 - g) / (1 + exp(-a * (log((1 - normal_cdf_right[i]) / normal_cdf_right[i]) + threshold)));
 
       // Add the area of this trapezoid to the integral
       integral += (hazard_left + hazard_right) * delta_x / 2.0;
     }
 
     // Compute the survival probability and action probability
-    real survival_prob = 1 - fmax(integral, 0.0);  // Avoid negative values
-    real action_prob = g + (1 - g) / (1 + exp(-a * (1 - normal_cdf(t_target, x, k * x)) - threshold));
+    real survival_prob = exp(-integral);  // Avoid negative values
+    real action_prob = g + (1 - g) / (1 + exp(-a * (log((1 - normal_cdf(t_target, x, k * x)) / normal_cdf(t_target, x, k * x)) + threshold)));
 
     // Return the log-likelihood
     return log(fmax(survival_prob * action_prob, 1e-10));  // Avoid log(0)
@@ -50,10 +50,10 @@ parameters {
 
 model {
   // Priors
-  k ~ normal(1, 0.5);
+  k ~ normal(5, 5);
   g ~ beta(2, 6);
-  threshold ~ beta(2, 6);
-  a ~ normal(10, 1);
+  threshold ~ normal(0, 6);
+  a ~ normal(10, 10);
 
   // Likelihood of observed data
   for (n in 1:N) {
