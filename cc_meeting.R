@@ -45,6 +45,7 @@ a <- 0.1   # Example slope parameter
 c <- 9# Example scaling factor
 n_steps <- 100
 t_steps <- seq(0, t_target, t_target/n_steps)
+plot(t_steps, purrr::map_dbl(t_steps, ~prob_target(t_target, ., k)))
 plot(t_steps, purrr::map_dbl(t_steps, ~hazard_function(., t_target, k, g, a,c)))
 plot(t_steps, purrr::map_dbl(t_steps, ~survival_function(., t_target, k, g, a, c)))
 plot(t_steps, purrr::map_dbl(t_steps, ~pdf_action_time(., t_target, k, g, a, c)))
@@ -60,7 +61,7 @@ fit_data %>% filter(known_t_to_target == block_duration) %>% pull(time_since_sta
 
 times <- seq(0, max(fit_data$block_duration), 0.5)
 
-surv_per <- purrr::map_dbl(times, \(x) sum(first_checks$time_since_start > x) / length(first_checks$time_since_start))
+surv_per <- purrr::map_dbl(times, \(x) sum(fit_data$time_since_start > x) / length(fit_data$time_since_start))
 
 plot(times, surv_per)
 
@@ -69,4 +70,4 @@ checks <- fit_data %>%
     rate_not_checked = time_since_last_cc / known_t_to_target
   ) 
 
-checks %>%filter(known_t_to_target < 300) %>%  pull(rate_not_checked) %>% hist(breaks = 50)
+checks %>%filter(known_t_to_target > 250) %>%  pull(rate_not_checked) %>% hist(breaks = 50)
