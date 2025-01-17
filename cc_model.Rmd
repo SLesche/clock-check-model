@@ -1,0 +1,27 @@
+---
+title: "Clock Checking Behavior Simulation"
+output: html_document
+---
+
+## Introduction
+
+Clock-checking behavior is influenced by both an individual's estimated time and random guessing, independent of the estimated time. This time estimation is a noisy process, with variance increasing proportional to the square of the elapsed time, as established in previous studies (Gibbon et al, 1984; Ren et al, 2021). The probability that the target time has been exceeded is derived from this noisy time estimation. 
+
+This probability is transformed into an action probability (clock check) using a sigmoid (IRT-like) function. The overall distribution of clock checks is calculated based on the probability of action, which serves as a hazard function, and the survival function, defined as \(1 - \int_0^t \text{hazard}(t) dt\). Below, we outline the simulation and model these processes step-by-step.
+
+---
+
+## Key Functions and Components
+
+### Target Time Probability
+
+The probability that the estimated time has exceeded the target time is given by:
+
+```{r}
+library(dplyr)
+library(purrr)
+
+# Function to calculate the probability of the target being exceeded
+prob_target <- function(t_target, t_step, k) {
+  return(1 - pnorm(t_target, t_step, k * t_step))
+}
