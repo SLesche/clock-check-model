@@ -10,12 +10,14 @@ clean_data <- data %>%
   mutate(
     r = time_since_last_cc / known_t_to_target
   ) %>% 
-  filter(r > 0.1, time_since_last_cc > 5)
+  filter(r > 0.01) # make sure that the data is not too close to 0 (this cause issues in integration)
+
 # Set up the data
 # Replace with your actual data
 stan_data <- list(
   N = nrow(clean_data),  # Number of events per participant
-  clock_check_time = clean_data$r
+  clock_check_time = clean_data$r,
+  eta = 1e-5
 )
 
 # Fit the model
@@ -23,7 +25,7 @@ fit <- stan(
   file = "survival_model_optim.stan",
   data = stan_data,
   iter = 2000,  # Number of iterations
-  chains = 1,   # Number of MCMC chains
+  chains = 4,   # Number of MCMC chains
   warmup = 500, # Number of warmup iterations
   init = function() list(k = 1, g = 0.3, c = 1)
 )
