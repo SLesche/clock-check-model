@@ -5,23 +5,82 @@ output: html_document
 
 ## Introduction
 
-Clock-checking behavior is influenced by both an individual's estimated time and random guessing, independent of the estimated time. This time estimation is a noisy process, with variance increasing proportional to the square of the elapsed time, as established in previous studies (Gibbon et al, 1984; Ren et al, 2021). The probability that the target time has been exceeded is derived from this noisy time estimation. 
+Clock-checking behavior is influenced by both an individual's estimated time and random guessing, independent of the estimated time. This time estimation is a noisy process, with standard deviation of estimated elapsed time increasing proportional to the elapsed time (Gibbon et al, 1984; Ren et al, 2021). This model assumes that each subject has a representation of both the estimated elapsed time and the uncertainty of this estimation. In the model, this is used to define the subjective uncertainty that the target time has already passed.
 
-This probability is transformed into an action probability (clock check) using a sigmoid (IRT-like) function. The overall distribution of clock checks is calculated based on the probability of action, which serves as a hazard function, and the survival function, defined as \(1 - \int_0^t \text{hazard}(t) dt\). Below, we outline the simulation and model these processes step-by-step.
+$$P(t_{target}) = 1 - \Phi(\frac{t_{target} - t}{k\cdot t})$$
+
+This probability is transformed into an action probability (clock check) using a sigmoid (IRT-like) function.
+
+$$P(action) = g + \frac{1 - g}{1 + e^{-a(log(\frac{P(t_{target})}{1 - P(t_{target})}) + c)}}$$
+
+The overall distribution of clock checks is calculated based on the probability of action, which serves as a hazard function $h(t)$, and the survival function $S(t)$, defined as \(exp(-\int_0^t h(t) dt)\). With
+
+$$h(t) = g + \frac{1 - g}{1 + e^{-a(log(\frac{1 - \Phi(\frac{t_{target} - t}{k*t}))}{1 - 1 - \Phi(\frac{t_{target} - t}{k*t}))}) + c)}}$$
+
+The likelihood of survival is then given by:
+$$ \mathcal{L} = S(t) \cdot h(t) $$
+Below, are some examples of implementation of this in R.
 
 ---
+
+```{r}
+library(dplyr)
+library(purrr)
+```
 
 ## Key Functions and Components
 
 ### Target Time Probability
 
 The probability that the estimated time has exceeded the target time is given by:
-
 ```{r}
-library(dplyr)
-library(purrr)
-
 # Function to calculate the probability of the target being exceeded
 prob_target <- function(t_target, t_step, k) {
   return(1 - pnorm(t_target, t_step, k * t_step))
 }
+
+prob_action <- function(prob_target, c, g, a = 10){
+  return(g + (1 - g)/(1 + exp(-a*(log(prob_target / (1 - prob_target)) + c))))
+}
+
+# Hazard function
+hazard_function <- function(t, t_target, k, g, a, c) {
+  z <- (1 - pnorm(t_target, t, k * t)) / pnorm(t_target, t, k * t)
+  action_prob <- g + (1 - g) / (1 + exp(-a * c) * z^-a)
+  return(action_prob)
+}
+
+# Survival function
+survival_function <- function(t, t_target, k, g, a, c) {
+  # Integrate the hazard function from 0 to t
+  cumulative_hazard <- integrate(function(u) hazard_function(u, t_target, k, g, a, c), 
+                                 lower = 0, upper = t)$value
+  return(exp(-cumulative_hazard))
+}
+
+# PDF of action times
+pdf_action_time <- function(t, t_target, k, g, a, c) {
+  lambda_t <- hazard_function(t, t_target, k, g, a, c)
+  S_t <- survival_function(t, t_target, k, g, a, c)
+  return(lambda_t * S_t)
+}
+```
+
+Using parameters:
+```{r}
+t_target <- 1    # Example target time
+k <- 2    # Example scale parameter
+g <- 0.1     # Example baseline probability
+a <- 0.1   # Example slope parameter
+c <- 9# Example scaling factor
+n_steps <- 100
+t_steps <- seq(0, t_target, t_target/n_steps)
+```
+
+```{r}
+plot(t_steps, purrr::map_dbl(t_steps, ~prob_target(t_target, ., k)), main = "Probability of Target Time exceeded", xlab = "time", ylab = "probability")
+plot(t_steps, purrr::map_dbl(t_steps, ~hazard_function(., t_target, k, g, a,c)), main = "Probability of Clock Check", xlab = "time", ylab = "probability of check")
+plot(t_steps, purrr::map_dbl(t_steps, ~survival_function(., t_target, k, g, a, c)), main = "Survival Function", xlab = "time", ylab = "survival")
+plot(t_steps, purrr::map_dbl(t_steps, ~pdf_action_time(., t_target, k, g, a, c)), main = "PDF of Clock Checks", xlab = "time", ylab = "density")
+```
+
