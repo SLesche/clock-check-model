@@ -17,10 +17,11 @@ clean_data <- data %>%
 stan_data <- list(
   N = nrow(clean_data),  # Number of events per participant
   clock_check_time = clean_data$r,
-  eta = 1e-5
+  eta = 1e-6
 )
 
 # Fit the model
+options(mc.cores = 4)
 fit <- stan(
   file = "survival_model_optim.stan",
   data = stan_data,
