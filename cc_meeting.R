@@ -64,10 +64,10 @@ pdf_action_time_cdf <- function(t, t_target, k, g, a, c) {
 
 # Parameters
 t_target <- 1    # Example target time
-k <- 1   # Example scale parameter
-g <- 0.3     # Example baseline probability
+k <- 0.65   # Example scale parameter
+g <- 0.71     # Example baseline probability
 a <- 1   # Example slope parameter
-c <- 1# Example scaling factor
+c <- 9# Example scaling factor
 n_steps <- 100
 t_steps <- seq(0, t_target, t_target/n_steps)
 survival_function_cdf(1, 1, k, g, a, c)

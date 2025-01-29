@@ -10,7 +10,8 @@ clean_data <- data %>%
   mutate(
     r = time_since_last_cc / known_t_to_target
   ) %>% 
-  filter(r > 0.01) # make sure that the data is not too close to 0 (this cause issues in integration)
+  filter(r > 0.01) %>% 
+  sample_n(200)# make sure that the data is not too close to 0 (this cause issues in integration)
 
 # Set up the data
 # Replace with your actual data
@@ -31,6 +32,7 @@ fit <- stan(
   init = function() list(k = 1, g = 0.3, c = 1)
 )
 
+saveRDS(fit, "stanfit_survival_model.rds")
 # Check convergence with traceplots
 traceplot(fit)
 
