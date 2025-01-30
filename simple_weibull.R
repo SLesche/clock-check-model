@@ -10,25 +10,92 @@ clean_data <- data %>%
   mutate(
     r = time_since_last_cc / known_t_to_target
   ) %>% 
-  filter(r > 0.01, known_t_to_target > 0) # make sure that the data is not too close to 0 (this cause issues in integration)
+  filter(r > 0.01, known_t_to_target > 0) %>% 
+  arrange(participant) %>% # make sure that the data is not too close to 0 (this cause issues in integration)
+  mutate(subject_id = dense_rank(participant))
 
-weibull_model <- survreg(Surv(clean_data$r) ~ known_t_to_target, data = clean_data, dist = "weibull")
+stan_data <- list(
+  N = nrow(clean_data),  # Number of events per participant
+  clock_check_time = clean_data$r,
+  known_t_to_target = (clean_data$known_t_to_target / clean_data$block_duration),
+  S = length(unique(clean_data$participant)),
+  subject_id = clean_data$subject_id
+)
 
-summary(weibull_model)
-library(ggplot2)
+# Fit the model
+options(mc.cores = parallel::detectCores())
+fit <- stan(
+  file = "simple_weibull_hierarch.stan",
+  data = stan_data,
+  iter = 2000,  # Number of iterations
+  chains = 4,   # Number of MCMC chains
+  warmup = 500, # Number of warmup iterations
+  # control = list(adapt_delta = 0.95, max_treedepth = 15, stepsize = 0.01)
+)
 
-# Assuming 'weibull_model' is already fitted and 'data' contains your actual data
-# Get the predicted values from the Weibull regression model
-predicted_values <- predict(weibull_model, type = "response")
+traceplot(fit)
+print(fit)
 
-hist(predicted_values)
-# Add predicted values to the data
-data$predicted_r <- predicted_values
+# Assuming 'fit' is the result from sampling the Stan model
+# Extract the posterior samples for alpha_subject and sigma_subject
+posterior_samples <- extract(fit)
 
-# Plot the data and the fitted model
-ggplot(data, aes(x = known_t, y = r)) +
-  geom_point(color = "blue", size = 3) +  # Original data points
-  geom_line(aes(x = known_t, y = predicted_r), color = "red", size = 1) +  # Fitted Weibull curve
-  labs(title = "Weibull Regression Fit", x = "Known_t", y = "r") +
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5))  # Center the plot title
+num_samples <- length(posterior_samples$alpha_subject)
+
+# Time points to evaluate the PDF
+time_points <- seq(0, max(clean_data$r), length.out = 100)
+
+# Matrix to store the PDF values for each time point and posterior sample
+pdf_matrix <- matrix(0, nrow = num_samples, ncol = length(time_points))
+# Function to compute the Weibull PDF
+weibull_pdf <- function(t, alpha, sigma) {
+  return((alpha / sigma) * (t / sigma)^(alpha - 1) * exp(-(t / sigma)^alpha))
+}
+# Loop over the posterior samples and compute the Weibull PDF
+for (i in 1:num_samples) {
+  pdf_matrix[i, ] <- weibull_pdf(time_points, posterior_samples$alpha_subject[i], posterior_samples$sigma_subject[i])
+}
+expected_pdf <- apply(pdf_matrix, 2, mean)
+
+plot(time_points, expected_pdf)
+lines(density(clean_data$r)$x, density(clean_data$r)$y)
+
+# Extract subject-level parameters
+alpha_subject_samples <- posterior_samples$alpha_subject  # Subject-level alpha parameters
+sigma_subject_samples <- posterior_samples$sigma_subject  # Subject-level sigma parameters
+
+# Assuming you have the number of subjects, S
+S <- length(unique(clean_data$subject_id))  # Number of subjects (assuming subject_id is available)
+
+# Create a dataframe to store the summary statistics
+subject_ids <- 1:S  # You can replace this with the actual subject_id if available
+alpha_subject_mean <- apply(alpha_subject_samples, 2, mean)  # Mean of alpha_subject for each subject
+sigma_subject_mean <- apply(sigma_subject_samples, 2, mean)  # Mean of sigma_subject for each subject
+
+# Create a dataframe with subject IDs, mean alpha, and mean sigma
+df_subject_params <- data.frame(
+  subject_id = subject_ids,
+  alpha_subject = alpha_subject_mean,
+  sigma_subject = sigma_subject_mean
+)
+
+# Optionally, add 95% credible intervals for each subject
+alpha_subject_ci <- apply(alpha_subject_samples, 2, function(x) quantile(x, probs = c(0.025, 0.975)))
+sigma_subject_ci <- apply(sigma_subject_samples, 2, function(x) quantile(x, probs = c(0.025, 0.975)))
+
+# Adding credible intervals to the dataframe
+df_subject_params$alpha_subject_lower <- alpha_subject_ci[1, ]
+df_subject_params$alpha_subject_upper <- alpha_subject_ci[2, ]
+df_subject_params$sigma_subject_lower <- sigma_subject_ci[1, ]
+df_subject_params$sigma_subject_upper <- sigma_subject_ci[2, ]
+
+# View the dataframe
+print(df_subject_params)
+
+full_data <- read.csv("data_clean.csv") 
+
+results <- df_subject_params %>% left_join(., full_data %>% select(subject_id = participant, pm_count) %>% distinct(subject_id, pm_count))
+
+results$cc_count <- clean_data %>% count(subject_id) %>% pull(n)
+
+cor(results[, c(2, 3, 8, 9)], use = "pairwise.complete.obs")

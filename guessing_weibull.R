@@ -73,6 +73,7 @@ lines(density(fit_data$r))
 full_data <- read.csv("data_clean.csv") 
 
 data <- results %>% left_join(., full_data %>% select(subject = participant, pm_count) %>% distinct(subject, pm_count))
+data$cc_count <- clean_data %>% count(subject_id) %>% pull(n)
 
 cor(data[, 2:5], use = "pairwise.complete.obs")
 
