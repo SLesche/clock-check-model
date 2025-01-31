@@ -2,27 +2,26 @@ library(dplyr)
 library(rstan)
 library(model.matrix)
 
-data <- read.csv("archive/diffusion_data.csv")
+data <- read.csv("weibull_data.csv")
 
 clean_data <- data %>% 
   # filter(
   #   block_duration == known_t_to_target
   # ) %>%
   mutate(
-    r = time_since_last_cc / known_t_to_target
-  ) %>% 
-  filter(r > 0.01, known_t_to_target > 0) %>% 
-  arrange(participant) %>% # make sure that the data is not too close to 0 (this cause issues in integration)
-  mutate(subject_id = dense_rank(participant)) %>% 
-  mutate(known_t_to_target = known_t_to_target / block_duration)
+    r_check = time_since_last_cc / known_t_to_target,
+    r_to_target = known_t_to_target / block_duration,
+  ) %>% # filter(r > 1) %>% View()
+  filter(r_check < 1.2) %>% 
+  filter(cens == 0)
 
 stan_data <- list(
   N = nrow(clean_data),  # Number of events per participant
-  clock_check_time = clean_data$r,
+  clock_check_time = clean_data$r_check,
   K_k = 2,
   K_lambda = 2,
-  X_k = model.matrix( ~ known_t_to_target, data = clean_data),
-  X_lambda = model.matrix(~ known_t_to_target, data = clean_data)
+  X_k = model.matrix( ~ r_to_target, data = clean_data),
+  X_lambda = model.matrix(~ r_to_target, data = clean_data)
 )
 
 # Fit the model
@@ -49,7 +48,7 @@ library(bayesplot)
 # Function to generate posterior predictive samples from Weibull regression
 generate_pp_samples <- function(stan_fit, stan_data, num_samples = 1000) {
   # Extract posterior draws for k and lambda
-  posterior_samples <- extract(stan_fit)
+  posterior_samples <- rstan::extract(stan_fit)
   
   # Compute k and lambda for each posterior draw
   k_pred <- exp(stan_data$X_k %*% t(posterior_samples$k))  # Matrix multiplication

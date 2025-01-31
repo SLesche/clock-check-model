@@ -83,7 +83,7 @@ data_clean <- data_clean %>%
   mutate(
     time_since_last_cc = time_since_start - cc_time
   ) %>% 
-  mutate(known_t_to_target = block_duration - cc_time) %>% 
+  mutate(known_t_to_target = 300 - cc_time) %>% 
   # # Normalize for model
   # group_by(participant, block_num) %>% 
   # mutate(rel_known_t_to_target = known_t_to_target / block_duration) %>% 
@@ -101,7 +101,8 @@ data_weibull_model <- data_clean %>%
   mutate(cens = 0) %>% 
   filter(time_since_last_cc != 0) %>% 
   # filter(time_to_end != 0) %>% 
-  na.omit()
+  na.omit() %>% 
+  left_join(., df_pm)
 
 last_cc_data <- data.frame(
   subject = rep(unique(data_weibull_model$subject_id), each = 8),
@@ -146,21 +147,15 @@ for (i in 1:nrow(last_cc_data)){
 
 last_cc_added <- data.table::rbindlist(last_ccs)
 last_cc_added$cens = 1
+last_cc_added <- last_cc_added %>% 
+  left_join(., df_pm)
 
 full_weibull <- data_weibull_model %>% 
   rbind(., last_cc_added) %>% 
-  filter(known_t_to_target != 0)
+  filter(known_t_to_target != 0) %>% 
+  arrange(participant, block_num, cc_time)
 
-data_weibull_model %>% 
-  filter(subject_id == 5) %>% View()
-  distinct(subject_id, block_num, known_t_to_target, time_since_last_cc) %>% 
-  group_by(subject_id, block_num) %>% 
-  filter(known_t_to_target == min(known_t_to_target)) %>% # Get last CCs 
-  ungroup() %>% 
-  count(subject_id) %>% 
-  filter(n != 8)
-
-write.csv(data_hazard_model, "hazard_data.csv")
+write.csv(full_weibull, "weibull_data.csv")
 
 data_diffusion_model <- data_clean %>% 
   filter(accessed_pm == 1, clock_check == 1) %>% 
