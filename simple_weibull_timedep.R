@@ -13,15 +13,16 @@ clean_data <- data %>%
   ) %>% 
   filter(r > 0.01, known_t_to_target > 0) %>% 
   arrange(participant) %>% # make sure that the data is not too close to 0 (this cause issues in integration)
-  mutate(subject_id = dense_rank(participant))
+  mutate(subject_id = dense_rank(participant)) %>% 
+  mutate(known_t_to_target = known_t_to_target / block_duration)
 
 stan_data <- list(
   N = nrow(clean_data),  # Number of events per participant
   clock_check_time = clean_data$r,
   K_k = 2,
-  K_lambda = 1,
+  K_lambda = 2,
   X_k = model.matrix( ~ known_t_to_target, data = clean_data),
-  X_lambda = model.matrix(~1, data = clean_data)
+  X_lambda = model.matrix(~ known_t_to_target, data = clean_data)
 )
 
 # Fit the model
@@ -41,64 +42,48 @@ print(fit)
 # Assuming 'fit' is the result from sampling the Stan model
 # Extract the posterior samples for alpha_subject and sigma_subject
 posterior_samples <- extract(fit)
+library(rstan)
+library(loo)
+library(bayesplot)
 
-num_samples <- length(posterior_samples$alpha_subject)
-
-# Time points to evaluate the PDF
-time_points <- seq(0, max(clean_data$r), length.out = 100)
-
-# Matrix to store the PDF values for each time point and posterior sample
-pdf_matrix <- matrix(0, nrow = num_samples, ncol = length(time_points))
-# Function to compute the Weibull PDF
-weibull_pdf <- function(t, alpha, sigma) {
-  return((alpha / sigma) * (t / sigma)^(alpha - 1) * exp(-(t / sigma)^alpha))
+# Function to generate posterior predictive samples from Weibull regression
+generate_pp_samples <- function(stan_fit, stan_data, num_samples = 1000) {
+  # Extract posterior draws for k and lambda
+  posterior_samples <- extract(stan_fit)
+  
+  # Compute k and lambda for each posterior draw
+  k_pred <- exp(stan_data$X_k %*% t(posterior_samples$k))  # Matrix multiplication
+  lambda_pred <- exp(stan_data$X_lambda %*% t(posterior_samples$lambda))
+  
+  # Generate posterior predictive samples
+  y_rep <- matrix(nrow = nrow(k_pred), ncol = num_samples)
+  for (i in 1:num_samples) {
+    y_rep[, i] <- rweibull(nrow(k_pred), shape = k_pred[, i], scale = lambda_pred[, i])
+  }
+  
+  return(y_rep)
 }
-# Loop over the posterior samples and compute the Weibull PDF
-for (i in 1:num_samples) {
-  pdf_matrix[i, ] <- weibull_pdf(time_points, posterior_samples$alpha_subject[i], posterior_samples$sigma_subject[i])
+
+# Function for model comparison using WAIC & LOO
+compute_model_criteria <- function(stan_fit) {
+  log_lik <- extract_log_lik(stan_fit)  # Extract log-likelihood
+  loo_result <- loo(log_lik)
+  waic_result <- waic(log_lik)
+  
+  return(list(loo = loo_result, waic = waic_result))
 }
-expected_pdf <- apply(pdf_matrix, 2, mean)
 
-plot(time_points, expected_pdf)
-lines(density(clean_data$r)$x, density(clean_data$r)$y)
+# Function to visualize posterior predictive checks
+plot_pp_checks <- function(y_obs, y_rep) {
+  ppc_dens_overlay(y_obs, y_rep[1:100, ])  # Overlay density plot
+}
 
-# Extract subject-level parameters
-alpha_subject_samples <- posterior_samples$alpha_subject  # Subject-level alpha parameters
-sigma_subject_samples <- posterior_samples$sigma_subject  # Subject-level sigma parameters
+y_rep <- generate_pp_samples(fit, stan_data, 500)
 
-# Assuming you have the number of subjects, S
-S <- length(unique(clean_data$subject_id))  # Number of subjects (assuming subject_id is available)
+plot_pp_checks(stan_data$clock_check_time, t(y_rep))
 
-# Create a dataframe to store the summary statistics
-subject_ids <- 1:S  # You can replace this with the actual subject_id if available
-alpha_subject_mean <- apply(alpha_subject_samples, 2, mean)  # Mean of alpha_subject for each subject
-sigma_subject_mean <- apply(sigma_subject_samples, 2, mean)  # Mean of sigma_subject for each subject
-
-# Create a dataframe with subject IDs, mean alpha, and mean sigma
-df_subject_params <- data.frame(
-  subject_id = subject_ids,
-  alpha_subject = alpha_subject_mean,
-  sigma_subject = sigma_subject_mean
-)
-
-# Optionally, add 95% credible intervals for each subject
-alpha_subject_ci <- apply(alpha_subject_samples, 2, function(x) quantile(x, probs = c(0.025, 0.975)))
-sigma_subject_ci <- apply(sigma_subject_samples, 2, function(x) quantile(x, probs = c(0.025, 0.975)))
-
-# Adding credible intervals to the dataframe
-df_subject_params$alpha_subject_lower <- alpha_subject_ci[1, ]
-df_subject_params$alpha_subject_upper <- alpha_subject_ci[2, ]
-df_subject_params$sigma_subject_lower <- sigma_subject_ci[1, ]
-df_subject_params$sigma_subject_upper <- sigma_subject_ci[2, ]
-
-# View the dataframe
-print(df_subject_params)
-
-full_data <- read.csv("data_clean.csv") 
-
-results <- df_subject_params %>% left_join(., full_data %>% select(subject_id = participant, pm_count) %>% distinct(subject_id, pm_count))
-
-results$cc_count <- clean_data %>% count(subject_id) %>% pull(n)
-results$b = results$sigma_subject ^ -results$alpha_subject
-
-cor(results[, c(2, 3, 8, 9, 10)], use = "pairwise.complete.obs")
+# Example usage:
+# fit <- stan("your_model.stan", data = stan_data, iter = 2000, chains = 4)
+# y_rep <- generate_pp_samples(fit, stan_data)
+# model_criteria <- compute_model_criteria(fit)
+# plot_pp_checks(stan_data$clock_check_time, y_rep)

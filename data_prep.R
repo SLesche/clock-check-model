@@ -88,33 +88,77 @@ data_clean <- data_clean %>%
   # group_by(participant, block_num) %>% 
   # mutate(rel_known_t_to_target = known_t_to_target / block_duration) %>% 
   # mutate(rel_time_since_last_cc = time_since_last_cc / known_t_to_target)
-  ungroup()
+  ungroup() %>%
+  mutate(subject_id = dense_rank(participant))
 
 write.csv(data_clean, "data_clean.csv")
 
-data_model <- data_clean %>% 
-  filter(accessed_pm == 1) %>% 
-  rename(
-    "id" = "participant",
-    "t_since_last_check" = time_since_last_cc,
-    "check" = clock_check
-  ) %>% 
+data_weibull_model <- data_clean %>% 
+  filter(clock_check == 1) %>% 
   select(
-    id, t_since_last_check, known_t_to_target, check
+    participant, subject_id, block_num, known_t_to_target, cc_time, time_since_start, time_to_end, time_since_last_cc, block_duration
   ) %>% 
-  na.omit() %>% 
-  mutate(id = dense_rank(id))
+  mutate(cens = 0) %>% 
+  filter(time_since_last_cc != 0) %>% 
+  # filter(time_to_end != 0) %>% 
+  na.omit()
 
-write.csv(data_model, "data_model.csv")
+last_cc_data <- data.frame(
+  subject = rep(unique(data_weibull_model$subject_id), each = 8),
+  block = rep(0:7, n = length(unique(data_weibull_model$subject_id)))
+)
 
-data_hazard_model <- data_clean %>% 
-  filter(accessed_pm == 1, (clock_check == 1) | time_since_start == 0) %>% 
-  select(
-    participant, block_num, time_since_start, time_to_end, block_duration
-  ) %>% 
-  filter(time_to_end != 0) %>% 
-  na.omit() %>% 
-  mutate(participant = dense_rank(participant))
+last_ccs <- vector(mode = "list", length = nrow(last_cc_data))
+
+for (i in 1:nrow(last_cc_data)){
+  # find last cc of this subject
+  last_cc_info = data_weibull_model %>% filter(subject_id == last_cc_data[i, "subject"], block_num == last_cc_data[i, "block"]) %>% filter(cc_time == max(cc_time)) %>% head(1) 
+  
+  # Add a final (censored cc)
+  if (nrow(last_cc_info) > 0){
+    additional_cc = data.frame(
+      participant = last_cc_info$participant,
+      subject_id = last_cc_info$subject_id,
+      block_num = last_cc_data[i, "block"],
+      known_t_to_target = last_cc_info$time_to_end,
+      cc_time = last_cc_info$time_since_start,
+      time_since_start = last_cc_info$block_duration,
+      time_to_end = 0,
+      time_since_last_cc = last_cc_info$time_to_end,
+      block_duration = last_cc_info$block_duration
+    )
+  } else {
+    additional_cc = data.frame(
+      participant = last_cc_data[i, "subject"],
+      subject_id = last_cc_data[i, "subject"],
+      block_num = last_cc_data[i, "block"],
+      known_t_to_target = data_clean %>% filter(subject_id == last_cc_data[i, "subject"], block_num == last_cc_data[i, "block"]) %>% pull(block_duration) %>% mean(na.rm = TRUE),
+      cc_time = 0,
+      time_since_start = data_clean %>% filter(subject_id == last_cc_data[i, "subject"], block_num == last_cc_data[i, "block"]) %>% pull(block_duration) %>% mean(na.rm = TRUE),
+      time_to_end = 0,
+      time_since_last_cc = data_clean %>% filter(subject_id == last_cc_data[i, "subject"], block_num == last_cc_data[i, "block"]) %>% pull(block_duration) %>% mean(na.rm = TRUE),
+      block_duration = data_clean %>% filter(subject_id == last_cc_data[i, "subject"], block_num == last_cc_data[i, "block"]) %>% pull(block_duration) %>% mean(na.rm = TRUE)
+    )
+  }
+  
+  last_ccs[[i]] = additional_cc
+}
+
+last_cc_added <- data.table::rbindlist(last_ccs)
+last_cc_added$cens = 1
+
+full_weibull <- data_weibull_model %>% 
+  rbind(., last_cc_added) %>% 
+  filter(known_t_to_target != 0)
+
+data_weibull_model %>% 
+  filter(subject_id == 5) %>% View()
+  distinct(subject_id, block_num, known_t_to_target, time_since_last_cc) %>% 
+  group_by(subject_id, block_num) %>% 
+  filter(known_t_to_target == min(known_t_to_target)) %>% # Get last CCs 
+  ungroup() %>% 
+  count(subject_id) %>% 
+  filter(n != 8)
 
 write.csv(data_hazard_model, "hazard_data.csv")
 
