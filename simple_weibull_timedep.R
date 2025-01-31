@@ -1,5 +1,6 @@
 library(dplyr)
 library(rstan)
+library(model.matrix)
 
 data <- read.csv("archive/diffusion_data.csv")
 
@@ -17,15 +18,16 @@ clean_data <- data %>%
 stan_data <- list(
   N = nrow(clean_data),  # Number of events per participant
   clock_check_time = clean_data$r,
-  known_t_to_target = (clean_data$known_t_to_target / clean_data$block_duration),
-  S = length(unique(clean_data$participant)),
-  subject_id = clean_data$subject_id
+  K_k = 2,
+  K_lambda = 1,
+  X_k = model.matrix( ~ known_t_to_target, data = clean_data),
+  X_lambda = model.matrix(~1, data = clean_data)
 )
 
 # Fit the model
 options(mc.cores = parallel::detectCores())
 fit <- stan(
-  file = "simple_weibull_hierarch.stan",
+  file = "simple_weibull_timedep.stan",
   data = stan_data,
   iter = 2000,  # Number of iterations
   chains = 4,   # Number of MCMC chains
