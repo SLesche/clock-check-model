@@ -1,6 +1,5 @@
 library(dplyr)
 library(rstan)
-library(model.matrix)
 
 data <- read.csv("weibull_data.csv")
 
@@ -12,16 +11,19 @@ clean_data <- data %>%
     r_check = time_since_last_cc / known_t_to_target,
     r_to_target = known_t_to_target / block_duration,
   ) %>% # filter(r > 1) %>% View()
-  filter(r_check < 1.2) %>% 
-  filter(cens == 0)
+  # filter(r_check < 1.2) %>% 
+  filter(accessed_pm == 1) %>% 
+  mutate(subject_id = dense_rank(subject_id))
 
 stan_data <- list(
   N = nrow(clean_data),  # Number of events per participant
-  clock_check_time = clean_data$r_check,
+  clock_check_time = clean_data$time_since_last_cc,
+  S = length(unique(clean_data$subject_id)),
+  subject = clean_data$subject_id,
   K_k = 2,
   K_lambda = 2,
-  X_k = model.matrix( ~ r_to_target, data = clean_data),
-  X_lambda = model.matrix(~ r_to_target, data = clean_data)
+  X_k = model.matrix( ~ known_t_to_target, data = clean_data),
+  X_lambda = model.matrix(~ known_t_to_target, data = clean_data)
 )
 
 # Fit the model

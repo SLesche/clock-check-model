@@ -1,30 +1,39 @@
 library(dplyr)
 library(brms)
 
-data <- read.csv("archive/diffusion_data.csv")
+data <- read.csv("weibull_data.csv")
 
-clean_data <- data %>% 
+clean_data <- data %>%
   # filter(
   #   block_duration == known_t_to_target
   # ) %>%
   mutate(
-    r = time_since_last_cc / known_t_to_target
+    r_check = time_since_last_cc / known_t_to_target,
+    r_to_target = known_t_to_target / 300,
+  ) %>% # filter(r > 1) %>% View()
+  mutate(
+    censor_reason = ifelse(cens == 1 & accessed_pm == 1, "waited_for_pm", 
+                           ifelse(cens == 1 & accessed_pm == 0, "clock_ran_out", "no_censor"))
   ) %>% 
-  filter(r > 0.01, known_t_to_target > 0) %>% 
-  arrange(participant) %>% # make sure that the data is not too close to 0 (this cause issues in integration)
-  mutate(subject_id = dense_rank(participant)) %>% 
-  mutate(known_t_to_target)
+  mutate(
+    r_check = ifelse(cens == 1, 1, r_check)
+  ) %>% 
+  filter(r_check < 5, r_check > 0) %>%
+  mutate(
+    event = 1 - cens
+  ) %>% 
+  ungroup()
 
 weibull_model <- brm(
-  bf(time_since_last_cc ~ 1 + known_t_to_target, shape ~ 1 + (1 | participant)),  # Weibull AFT model
+  bf(r_check | cens(event) ~ 1 + known_t_to_target),  # Weibull AFT model
   family = weibull(),
   data = clean_data,
   chains = 4, iter = 2000, warmup = 1000, cores = 4,
-  prior = c(
-    prior(normal(0, 2), class = "b"),  # Prior for regression coefficient
-    prior(normal(0, 2), class = "Intercept") # Prior for Intercept
-    # prior(normal(1, 1), class = "shape")
-    )  # Prior for shape parameter
+  # prior = c(
+  #   prior(normal(0, 2), class = "b"),  # Prior for regression coefficient
+  #   prior(normal(0, 2), class = "Intercept") # Prior for Intercept
+  #   # prior(normal(1, 1), class = "shape")
+  #   )  # Prior for shape parameter
 )
 
 summary(weibull_model)

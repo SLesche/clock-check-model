@@ -91,7 +91,7 @@ data_clean <- data_clean %>%
   ungroup() %>%
   mutate(subject_id = dense_rank(participant))
 
-write.csv(data_clean, "data_clean.csv")
+# write.csv(data_clean, "data_clean.csv")
 
 data_weibull_model <- data_clean %>% 
   filter(clock_check == 1) %>% 
@@ -121,7 +121,7 @@ for (i in 1:nrow(last_cc_data)){
       participant = last_cc_info$participant,
       subject_id = last_cc_info$subject_id,
       block_num = last_cc_data[i, "block"],
-      known_t_to_target = last_cc_info$time_to_end,
+      known_t_to_target = 300 - last_cc_info$time_since_start,
       cc_time = last_cc_info$time_since_start,
       time_since_start = last_cc_info$block_duration,
       time_to_end = 0,
@@ -133,7 +133,7 @@ for (i in 1:nrow(last_cc_data)){
       participant = last_cc_data[i, "subject"],
       subject_id = last_cc_data[i, "subject"],
       block_num = last_cc_data[i, "block"],
-      known_t_to_target = data_clean %>% filter(subject_id == last_cc_data[i, "subject"], block_num == last_cc_data[i, "block"]) %>% pull(block_duration) %>% mean(na.rm = TRUE),
+      known_t_to_target = 300,
       cc_time = 0,
       time_since_start = data_clean %>% filter(subject_id == last_cc_data[i, "subject"], block_num == last_cc_data[i, "block"]) %>% pull(block_duration) %>% mean(na.rm = TRUE),
       time_to_end = 0,
@@ -152,7 +152,14 @@ last_cc_added <- last_cc_added %>%
 
 full_weibull <- data_weibull_model %>% 
   rbind(., last_cc_added) %>% 
-  filter(known_t_to_target != 0) %>% 
+  filter(time_since_last_cc != 0) %>%
+  mutate(
+    r_check = time_since_last_cc / block_duration,
+    r_to_target = known_t_to_target / block_duration,
+  ) %>% # filter(r > 1) %>% View()
+  # mutate(
+  #   r_check = ifelse(cens == 1, block_duration)
+  # ) %>% 
   arrange(participant, block_num, cc_time)
 
 write.csv(full_weibull, "weibull_data.csv")
