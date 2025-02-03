@@ -17,7 +17,7 @@ clean_data <- data %>%
 
 stan_data <- list(
   N = nrow(clean_data),  # Number of events per participant
-  clock_check_time = clean_data$time_since_last_cc,
+  clock_check_time = clean_data$r_check,
   S = length(unique(clean_data$subject_id)),
   subject = clean_data$subject_id,
   K_k = 2,
