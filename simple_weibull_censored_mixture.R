@@ -26,42 +26,42 @@ clean_data <- data %>%
   mutate(
     event = ifelse(censor_reason == "clock_ran_out", 1 - cens, 1),
   ) %>% 
+  filter(!is.na(event)) %>% 
   # filter(r_to_target > 0.95) %>% 
-  # filter(
-  #   accessed_pm == 1
-  # ) %>% 
+  filter(
+    accessed_pm == 1
+  ) %>%
   ungroup()
-
-data_censored <- clean_data %>% 
-  filter(event == 0)
-data_uncensored <- clean_data %>% 
-  filter(event == 1)
-
-hist(data_uncensored$time_since_last_cc, breaks = 50)
-hist(data_censored$time_since_last_cc, breaks = 50)
-hist(data_uncensored$r_check, breaks = 50)
-hist(data_censored$r_check, breaks = 50)
+# 
+# data_censored <- clean_data %>% 
+#   filter(event == 0)
+# data_uncensored <- clean_data %>% 
+#   filter(event == 1)
+# 
+# hist(data_uncensored$time_since_last_cc, breaks = 50)
+# hist(data_censored$time_since_last_cc, breaks = 50)
+# hist(data_uncensored$r_check, breaks = 50)
+# hist(data_censored$r_check, breaks = 50)
 hist(clean_data$r_check, breaks = 50)
 
 stan_data <- list(
-  N_censored = nrow(data_censored),
-  N_uncensored = nrow(data_uncensored),
-  censored_times = data_censored$time_since_last_cc / 300,
-  uncensored_times = data_uncensored$time_since_last_cc / 300,
-  K_k = 3,
-  K_lambda = 3,
+  N = nrow(clean_data),
+  times = clean_data$r_check,
+  event = clean_data$event,
+  K_k = 1,
+  K_lambda = 1,
   K_lambda2 = 1,
-  K
-  X_k_censored = model.matrix( ~ r_to_target + is_first_guess, data = data_censored),
-  X_lambda_censored = model.matrix(~ r_to_target + is_first_guess, data = data_censored),
-  X_k_uncensored = model.matrix( ~ r_to_target + is_first_guess, data = data_uncensored),
-  X_lambda_uncensored = model.matrix(~ r_to_target + is_first_guess, data = data_uncensored)
+  K_mixture = 1,
+  X_k = model.matrix( ~1, data = clean_data),
+  X_lambda = model.matrix(~ 1, data = clean_data),
+  X_lambda2 = model.matrix(~ 1, data = clean_data),
+  X_mixture = model.matrix(~ 1, data = clean_data)
 )
 
 # Fit the model
 options(mc.cores = parallel::detectCores())
 fit <- stan(
-  file = "simple_weibull_censored.stan",
+  file = "simple_weibull_censored_mixed_timedep.stan",
   data = stan_data,
   iter = 2000,  # Number of iterations
   chains = 4,   # Number of MCMC chains
