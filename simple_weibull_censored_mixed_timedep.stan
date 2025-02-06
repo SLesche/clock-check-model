@@ -37,13 +37,13 @@ model {
   for (n in 1:N) {
     if (event[n] == 1) {
       target += log_mix(mixture_prob[n], 
-        weibull_lpdf(times[n] | k_pred[n], lambda_pred[n]),
-        weibull_lpdf(times[n] | 1, lambda2_pred[n])
+        weibull_lpdf(times[n] | 1, lambda2_pred[n]),
+        weibull_lpdf(times[n] | k_pred[n], lambda_pred[n])
       );
     } else {
       target += log_mix(mixture_prob[n], 
-        weibull_lccdf(times[n] | k_pred[n], lambda_pred[n]),
-        weibull_lccdf(times[n] | 1, lambda2_pred[n])
+        weibull_lccdf(times[n] | 1, lambda2_pred[n]),
+        weibull_lccdf(times[n] | k_pred[n], lambda_pred[n])
       );
     }
   }
