@@ -21,10 +21,13 @@ clean_data <- data %>%
   # mutate(
   #   r_check = ifelse(cens == 1, 1, r_check)
   # ) %>% 
-  filter(r_check < 2, r_check > 0) %>%
+  # filter(r_check < 2, r_check > 0) %>%
   mutate(
     event = ifelse(censor_reason == "clock_ran_out", 1 - cens, 1),
   ) %>% 
+  # filter(
+  #   accessed_pm == 1
+  # ) %>% 
   ungroup()
 
 data_censored <- clean_data %>% 
@@ -32,14 +35,14 @@ data_censored <- clean_data %>%
 data_uncensored <- clean_data %>% 
   filter(event == 1)
 
-hist(data_uncensored$r_check, breaks = 50)
-hist(data_censored$r_check, breaks = 50)
+hist(data_uncensored$time_since_last_cc, breaks = 50)
+hist(data_censored$time_since_last_cc, breaks = 50)
 
 stan_data <- list(
   N_censored = nrow(data_censored),
   N_uncensored = nrow(data_uncensored),
-  censored_times = data_censored$r_check,
-  uncensored_times = data_uncensored$r_check,
+  censored_times = data_censored$time_since_last_cc / 300,
+  uncensored_times = data_uncensored$time_since_last_cc / 300,
   K_k = 2,
   K_lambda = 2,
   X_k_censored = model.matrix( ~ r_to_target, data = data_censored),
@@ -63,7 +66,7 @@ traceplot(fit)
 print(fit)
 
 # Kaplan-Meier Plot
-survfit2(Surv(r_check, event) ~ 1, data = clean_data %>% filter(r_check > 0, r_check < 2)) %>% 
+survfit2(Surv(time_since_last_cc, event) ~ 1, data = clean_data) %>% 
   ggsurvfit() +
   labs(
     x = "Days",
@@ -71,8 +74,3 @@ survfit2(Surv(r_check, event) ~ 1, data = clean_data %>% filter(r_check > 0, r_c
   )
 
 
-# Create a sequence of time points for the Weibull prediction
-t_vals <- seq(0, max(data$time), length.out = 100)
-
-# Compute the predicted Weibull survival probabilities at these times
-S_weibull <- exp(- (t_vals / lambda)^shape)

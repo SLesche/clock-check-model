@@ -15,17 +15,28 @@ clean_data <- data %>%
     censor_reason = ifelse(cens == 1 & accessed_pm == 1, "waited_for_pm", 
                            ifelse(cens == 1 & accessed_pm == 0, "clock_ran_out", "no_censor"))
   ) %>% 
+  # mutate(
+  #   r_check = ifelse(cens == 1, 1, r_check)
+  # ) %>% 
+  filter(r_check < 2, r_check > 0) %>%
   mutate(
-    r_check = ifelse(cens == 1, 1, r_check)
+    event = ifelse(censor_reason == "clock_ran_out", 1 - cens, 1),
   ) %>% 
-  filter(r_check < 5, r_check > 0) %>%
-  mutate(
-    event = 1 - cens
-  ) %>% 
+  # filter(
+  #   accessed_pm == 1
+  # ) %>%
   ungroup()
 
+data_censored <- clean_data %>% 
+  filter(event == 0)
+data_uncensored <- clean_data %>% 
+  filter(event == 1)
+
+hist(data_uncensored$r_check, breaks = 50)
+hist(data_censored$r_check, breaks = 50)
+
 weibull_model <- brm(
-  bf(r_check | cens(event) ~ 1 + known_t_to_target),  # Weibull AFT model
+  bf(r_check | cens(event) ~ r_to_target + (r_to_target | subject_id)),  # Weibull ATF model
   family = weibull(),
   data = clean_data,
   chains = 4, iter = 2000, warmup = 1000, cores = 4,
@@ -38,7 +49,7 @@ weibull_model <- brm(
 
 summary(weibull_model)
 
-pp_check(weibull_model)
+pp_check(weibull_model, ndraws = 50)
 
 posterior_samples(weibull_model) %>% head()
 
