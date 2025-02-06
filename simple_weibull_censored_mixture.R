@@ -50,6 +50,8 @@ stan_data <- list(
   uncensored_times = data_uncensored$time_since_last_cc / 300,
   K_k = 3,
   K_lambda = 3,
+  K_lambda2 = 1,
+  K
   X_k_censored = model.matrix( ~ r_to_target + is_first_guess, data = data_censored),
   X_lambda_censored = model.matrix(~ r_to_target + is_first_guess, data = data_censored),
   X_k_uncensored = model.matrix( ~ r_to_target + is_first_guess, data = data_uncensored),
