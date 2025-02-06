@@ -64,6 +64,14 @@ fit <- stan(
 traceplot(fit)
 print(fit)
 
+# returns k = exp(0.9), lambda = exp(-0.7), lambda2 = exp(-1.53), g = exp(-2.19) / (1 + exp(-2.19))
+plot_pred_vs_actual(
+  simulate_mixture_weibull(nrow(simulated_data), 0.1, exp(0.9), exp(-0.7), exp(-1.53)),
+  simulated_data$times,
+  simulated_data$event,
+  simulated_data
+)
+
 data <- read.csv("weibull_data.csv")
 
 clean_data <- data %>%
