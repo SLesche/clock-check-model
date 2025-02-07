@@ -138,6 +138,9 @@ clean_data <- data %>%
   filter(
     accessed_pm == 1
   ) %>%
+  mutate(
+    subject_id = dense_rank(participant)
+  ) %>% 
   ungroup()
 # 
 # data_censored <- clean_data %>% 
@@ -228,7 +231,7 @@ traceplot(hierarch_fit, pars = c("k[1]", "lambda[1]", "lambda2[1]", "mixture_rat
 
 bayesplot::mcmc_areas(
   hierarch_fit,
-  pars = c("k[1]", "k[2]", "k[3]"),
+  pars = c("k_global"),
   prob = 0.9
 )
 

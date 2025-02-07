@@ -67,10 +67,10 @@ model {
   }
 
   // Hyperpriors for the random effect standard deviations
-  sigma_k ~ exponential(1);
-  sigma_lambda ~ exponential(1);
-  sigma_lambda2 ~ exponential(1);
-  sigma_mixture_rate ~ exponential(1);
+  sigma_k ~ gamma(2, 4);
+  sigma_lambda ~ gamma(2, 4);
+  sigma_lambda2 ~ gamma(2, 4);
+  sigma_mixture_rate ~ gamma(2, 4);
 
   // Likelihood
   for (n in 1:N) {
