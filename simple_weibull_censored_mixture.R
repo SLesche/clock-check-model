@@ -14,8 +14,32 @@ simulate_mixture_weibull <- function(n, g, k1, lambda1, lambda2){
 simulate_from_predicted <- function(data, fit, ndraws){
   result = matrix(NA, nrow = nrow(data), ncol = ndraws)
   
-  posteriors = extract(fit, pars = c("k_pred", "lambda_pred", "lambda2_pred", "mixture_prob"))
+  posteriors = extract(fit, pars = c("k_pred", "lambda_pred", "mixture_prob"))
   
+  sample_ids = sample(1:nrow(posteriors$k_pred), ndraws)
+  posterior_samples_k = posteriors$k_pred[sample_ids, ]
+  posterior_samples_lambda = posteriors$lambda_pred[sample_ids, ]
+  # posterior_samples_lambda2 = 1
+  posterior_samples_mixture = posteriors$mixture_prob[sample_ids, ]
+  
+  for (idraw in 1:ndraws){
+    result[, idraw] = simulate_mixture_weibull(
+      nrow(data), 
+      posterior_samples_mixture[idraw, ],
+      posterior_samples_k[idraw, ],
+      posterior_samples_lambda[idraw, ],
+      1
+      )
+  }
+  
+  return(result)
+}
+
+simulate_from_predicted_4p <- function(data, fit, ndraws){
+  result = matrix(NA, nrow = nrow(data), ncol = ndraws)
+  
+  posteriors = extract(fit, pars = c("k_pred", "lambda_pred", "lambda2_pred", "mixture_prob"))
+
   sample_ids = sample(1:nrow(posteriors$k_pred), ndraws)
   posterior_samples_k = posteriors$k_pred[sample_ids, ]
   posterior_samples_lambda = posteriors$lambda_pred[sample_ids, ]
@@ -29,7 +53,7 @@ simulate_from_predicted <- function(data, fit, ndraws){
       posterior_samples_k[idraw, ],
       posterior_samples_lambda[idraw, ],
       posterior_samples_lambda2[idraw, ]
-      )
+    )
   }
   
   return(result)
@@ -71,7 +95,7 @@ plot_pred_vs_actual <- function(pred_surv, actual_surv, event_status, data) {
 }
 
 simulated_data <- data.frame(
-  times = simulate_mixture_weibull(10000, 0.1, 2.45, 0.5, 0.2),
+  times = simulate_mixture_weibull(1000, 0.1, 2.45, 0.5, 0.2),
   event = 1
 )
 
@@ -103,9 +127,11 @@ fit <- stan(
 traceplot(fit)
 print(fit)
 
+predicted_data <- simulate_from_predicted(simulated_data, fit, 100)
+
 # returns k = exp(0.9), lambda = exp(-0.7), lambda2 = exp(-1.53), g = exp(-2.19) / (1 + exp(-2.19))
 plot_pred_vs_actual(
-  simulate_mixture_weibull(nrow(simulated_data), exp(-2.34) / (1 + exp(-2.34)), exp(0.89), exp(-0.7), exp(-1.70)),
+  predicted_data,
   simulated_data$times,
   simulated_data$event,
   simulated_data
@@ -158,20 +184,20 @@ stan_data <- list(
   N = nrow(clean_data),
   times = clean_data$r_check,
   event = clean_data$event,
-  K_k = 2,
-  K_lambda = 2,
-  K_lambda2 = 2,
+  K_k = 3,
+  K_lambda = 1,
+  # K_lambda2 = 2,
   K_mixture = 2,
-  X_k = model.matrix( ~ is_first_guess, data = clean_data),
-  X_lambda = model.matrix(~ is_first_guess, data = clean_data),
-  X_lambda2 = model.matrix(~ is_first_guess, data = clean_data),
+  X_k = model.matrix( ~ is_first_guess + r_to_target, data = clean_data),
+  X_lambda = model.matrix(~ 1, data = clean_data),
+  # X_lambda2 = model.matrix(~ is_first_guess, data = clean_data),
   X_mixture = model.matrix(~ is_first_guess, data = clean_data)
 )
 
 # Fit the model
 options(mc.cores = parallel::detectCores())
 fit <- stan(
-  file = "simple_weibull_censored_mixed_timedep.stan",
+  file = "very_simple_weibull_censored_mixed_timedep.stan",
   data = stan_data,
   iter = 2000,  # Number of iterations
   chains = 4,   # Number of MCMC chains
@@ -179,17 +205,25 @@ fit <- stan(
   # control = list(adapt_delta = 0.95, max_treedepth = 15, stepsize = 0.01)
 )
 
-traceplot(fit, pars = c("k[1]", "lambda[1]", "lambda2[1]", "mixture_rate[1]"))
+# traceplot(fit, pars = c("k[1]", "lambda[1]", "mixture_rate[1]"))
 
 bayesplot::mcmc_areas(
   fit,
-  pars = c("k[1]", "k[2]", "lambda[1]", "lambda[2]"),
+  pars = c("k[1]", "k[2]", "k[3]", "lambda[1]", "lambda[2]", "lambda[3]"),
   prob = 0.9
 )
 
-posteriors <- extract(fit, pars = c("k[1]", "lambda[1]", "lambda2[1]", "mixture_rate[1]"))
+bayesplot::mcmc_areas(
+  fit,
+  pars = c("mixture_rate[1]", "mixture_rate[2]", "lambda2[1]", "lambda2[2]"),
+  prob = 0.9
+)
 
-predicted_data <- simulate_from_predicted(clean_data, fit, 100)
+posteriors <- extract(fit, pars = c("mixture_prob"))
+
+lm(colMeans(posteriors$mixture_prob) ~ clean_data$is_first_guess) %>% summary()
+
+predicted_data <- simulate_from_predicted_4p(clean_data, fit, 100)
 
 plot_pred_vs_actual(
   predicted_data,
@@ -210,16 +244,16 @@ stan_data <- list(
   K_mixture = 1,
   S = length(unique(clean_data$subject_id)),
   subject_id = clean_data$subject_id,
-  X_k = model.matrix( ~ 1, data = clean_data),
-  X_lambda = model.matrix(~ 1, data = clean_data),
-  X_lambda2 = model.matrix(~ 1, data = clean_data),
-  X_mixture = model.matrix(~ 1, data = clean_data)
+  X_k = model.matrix( ~ is_first_guess, data = clean_data),
+  X_lambda = model.matrix(~ is_first_guess, data = clean_data),
+  # X_lambda2 = model.matrix(~ is_first_guess, data = clean_data),
+  X_mixture = model.matrix(~ is_first_guess, data = clean_data)
 )
 
 # Fit the model
 options(mc.cores = parallel::detectCores())
 hierarch_fit <- stan(
-  file = "hierarch_weibull_censored_mixed_timedep.stan",
+  file = "3p_hierarch_weibull_censored_mixed_timedep.stan",
   data = stan_data,
   iter = 2000,  # Number of iterations
   chains = 4,   # Number of MCMC chains
