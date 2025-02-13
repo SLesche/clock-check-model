@@ -11,6 +11,10 @@ simulate_mixture_weibull <- function(n, g, k1, lambda1, lambda2){
   ifelse(runif(n, 0, 1) <= g, rweibull(n, 1, lambda2), rweibull(n, k1, lambda1))
 }
 
+simulate_full_mixture_weibull <- function(n, g, k1, k2, lambda1, lambda2){
+  ifelse(runif(n, 0, 1) <= g, rweibull(n, k2, lambda2), rweibull(n, k1, lambda1))
+}
+
 simulate_from_predicted <- function(data, fit, ndraws){
   result = matrix(NA, nrow = nrow(data), ncol = ndraws)
   
@@ -51,6 +55,32 @@ simulate_from_predicted_4p <- function(data, fit, ndraws){
       nrow(data), 
       posterior_samples_mixture[idraw, ],
       posterior_samples_k[idraw, ],
+      posterior_samples_lambda[idraw, ],
+      posterior_samples_lambda2[idraw, ]
+    )
+  }
+  
+  return(result)
+}
+
+simulate_from_predicted_5p <- function(data, fit, ndraws){
+  result = matrix(NA, nrow = nrow(data), ncol = ndraws)
+  
+  posteriors = extract(fit, pars = c("k_pred", "k2_pred", "lambda_pred", "lambda2_pred", "mixture_prob"))
+  
+  sample_ids = sample(1:nrow(posteriors$k_pred), ndraws)
+  posterior_samples_k = posteriors$k_pred[sample_ids, ]
+  posterior_samples_k2 = posteriors$k2_pred[sample_ids, ]
+  posterior_samples_lambda = posteriors$lambda_pred[sample_ids, ]
+  posterior_samples_lambda2 = posteriors$lambda2_pred[sample_ids, ]
+  posterior_samples_mixture = posteriors$mixture_prob[sample_ids, ]
+  
+  for (idraw in 1:ndraws){
+    result[, idraw] = simulate_full_mixture_weibull(
+      nrow(data), 
+      posterior_samples_mixture[idraw, ],
+      posterior_samples_k[idraw, ],
+      posterior_samples_k2[idraw, ],
       posterior_samples_lambda[idraw, ],
       posterior_samples_lambda2[idraw, ]
     )
@@ -167,7 +197,8 @@ clean_data <- data %>%
   mutate(
     subject_id = dense_rank(participant)
   ) %>% 
-  ungroup()
+  ungroup() %>% 
+  filter(is_first_guess == 1)
 # 
 # data_censored <- clean_data %>% 
 #   filter(event == 0)
@@ -184,20 +215,20 @@ stan_data <- list(
   N = nrow(clean_data),
   times = clean_data$r_check,
   event = clean_data$event,
-  K_k = 3,
-  K_lambda = 1,
-  # K_lambda2 = 2,
+  K_k = 2,
+  K_lambda = 2,
+  K_lambda2 = 2,
   K_mixture = 2,
-  X_k = model.matrix( ~ is_first_guess + r_to_target, data = clean_data),
-  X_lambda = model.matrix(~ 1, data = clean_data),
-  # X_lambda2 = model.matrix(~ is_first_guess, data = clean_data),
-  X_mixture = model.matrix(~ is_first_guess, data = clean_data)
+  X_k = model.matrix( ~ r_to_target, data = clean_data),
+  X_lambda = model.matrix(~ r_to_target, data = clean_data),
+  X_lambda2 = model.matrix(~ r_to_target, data = clean_data),
+  X_mixture = model.matrix(~ r_to_target, data = clean_data)
 )
 
 # Fit the model
 options(mc.cores = parallel::detectCores())
 fit <- stan(
-  file = "very_simple_weibull_censored_mixed_timedep.stan",
+  file = "5p_weibull_censored_mixed_timedep.stan",
   data = stan_data,
   iter = 2000,  # Number of iterations
   chains = 4,   # Number of MCMC chains
@@ -223,15 +254,28 @@ posteriors <- extract(fit, pars = c("mixture_prob"))
 
 lm(colMeans(posteriors$mixture_prob) ~ clean_data$is_first_guess) %>% summary()
 
-predicted_data <- simulate_from_predicted_4p(clean_data, fit, 100)
+predicted_data <- simulate_from_predicted_5p(clean_data, fit, 100)
 
 plot_pred_vs_actual(
   predicted_data,
   clean_data$r_check,
   clean_data$event,
   clean_data
-)
+)+ 
+  xlim(0, 1)
 
+# Plot survival curves
+surv_data <- clean_data %>% 
+  mutate(
+    times_to_target = case_when(
+      known_t_to_target > 250 ~ "long",
+      known_t_to_target <= 250 & known_t_to_target > 100 ~ "semi-long",
+      known_t_to_target <= 100 & known_t_to_target > 50 ~ "mid",
+      known_t_to_target <= 50 ~ "short"
+    )
+  )
+
+ggsurvfit(survfit(Surv(r_check, event) ~ times_to_target, data = surv_data)) 
 
 ## ---- Hierarchical
 stan_data <- list(
