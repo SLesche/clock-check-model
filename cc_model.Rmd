@@ -70,8 +70,8 @@ Using parameters:
 ```{r}
 t_target <- 1    # Example target time
 k <- 2    # Example scale parameter
-g <- 0.1     # Example baseline probability
-a <- 0.1   # Example slope parameter
+g <- 0.4     # Example baseline probability
+a <- 1   # Example slope parameter
 c <- 9# Example scaling factor
 n_steps <- 100
 t_steps <- seq(0, t_target, t_target/n_steps)

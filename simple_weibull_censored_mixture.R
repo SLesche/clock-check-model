@@ -62,7 +62,6 @@ simulate_from_predicted_4p <- function(data, fit, ndraws){
   
   return(result)
 }
-
 simulate_from_predicted_5p <- function(data, fit, ndraws){
   result = matrix(NA, nrow = nrow(data), ncol = ndraws)
   
@@ -125,9 +124,10 @@ plot_pred_vs_actual <- function(pred_surv, actual_surv, event_status, data) {
 }
 
 simulated_data <- data.frame(
-  times = simulate_mixture_weibull(1000, 0.1, 2.45, 0.5, 0.2),
+  times = simulate_full_mixture_weibull(1000, 0.1, 2.4, 0.5, 0.5, 0.1),
   event = 1
 )
+hist(simulated_data$times, breaks = 50)
 
 stan_data <- list(
   N = nrow(simulated_data),
@@ -146,7 +146,7 @@ stan_data <- list(
 # Fit the model
 options(mc.cores = parallel::detectCores())
 fit <- stan(
-  file = "simple_weibull_censored_mixed_timedep.stan",
+  file = "5p_weibull_censored_mixed_timedep.stan",
   data = stan_data,
   iter = 2000,  # Number of iterations
   chains = 4,   # Number of MCMC chains
@@ -157,7 +157,7 @@ fit <- stan(
 traceplot(fit)
 print(fit)
 
-predicted_data <- simulate_from_predicted(simulated_data, fit, 100)
+predicted_data <- simulate_from_predicted_5p(simulated_data, fit, 100)
 
 # returns k = exp(0.9), lambda = exp(-0.7), lambda2 = exp(-1.53), g = exp(-2.19) / (1 + exp(-2.19))
 plot_pred_vs_actual(
@@ -197,8 +197,10 @@ clean_data <- data %>%
   mutate(
     subject_id = dense_rank(participant)
   ) %>% 
-  ungroup() %>% 
-  filter(is_first_guess == 1)
+  filter(event == 1) %>% 
+  filter(!(is_first_guess == 1 & r_check < 0.1)) %>% 
+  # filter(is_first_guess == 0) %>%
+  ungroup() 
 # 
 # data_censored <- clean_data %>% 
 #   filter(event == 0)
@@ -228,7 +230,7 @@ stan_data <- list(
 # Fit the model
 options(mc.cores = parallel::detectCores())
 fit <- stan(
-  file = "5p_weibull_censored_mixed_timedep.stan",
+  file = "very_simple_weibull_censored_mixed_timedep.stan",
   data = stan_data,
   iter = 2000,  # Number of iterations
   chains = 4,   # Number of MCMC chains
@@ -238,23 +240,23 @@ fit <- stan(
 
 # traceplot(fit, pars = c("k[1]", "lambda[1]", "mixture_rate[1]"))
 
-bayesplot::mcmc_areas(
-  fit,
-  pars = c("k[1]", "k[2]", "k[3]", "lambda[1]", "lambda[2]", "lambda[3]"),
-  prob = 0.9
-)
-
-bayesplot::mcmc_areas(
-  fit,
-  pars = c("mixture_rate[1]", "mixture_rate[2]", "lambda2[1]", "lambda2[2]"),
-  prob = 0.9
-)
-
+# bayesplot::mcmc_areas(
+#   fit,
+#   pars = c("k[1]", "k[2]", "k[3]", "lambda[1]", "lambda[2]", "lambda[3]"),
+#   prob = 0.9
+# )
+# 
+# bayesplot::mcmc_areas(
+#   fit,
+#   pars = c("mixture_rate[1]", "mixture_rate[2]", "lambda2[1]", "lambda2[2]"),
+#   prob = 0.9
+# )
+# 
 posteriors <- extract(fit, pars = c("mixture_prob"))
 
-lm(colMeans(posteriors$mixture_prob) ~ clean_data$is_first_guess) %>% summary()
+lm(colMeans(posteriors$mixture_prob) ~ clean_data$r_to_target) %>% summary()
 
-predicted_data <- simulate_from_predicted_5p(clean_data, fit, 100)
+predicted_data <- simulate_from_predicted(clean_data, fit, 100)
 
 plot_pred_vs_actual(
   predicted_data,
@@ -262,7 +264,7 @@ plot_pred_vs_actual(
   clean_data$event,
   clean_data
 )+ 
-  xlim(0, 1)
+  xlim(0, 2)
 
 # Plot survival curves
 surv_data <- clean_data %>% 
@@ -284,12 +286,12 @@ stan_data <- list(
   event = clean_data$event,
   K_k = 1,
   K_lambda = 1,
-  K_lambda2 = 1,
-  K_mixture = 1,
-  S = length(unique(clean_data$subject_id)),
-  subject_id = clean_data$subject_id,
-  X_k = model.matrix( ~ is_first_guess, data = clean_data),
-  X_lambda = model.matrix(~ is_first_guess, data = clean_data),
+  # K_lambda2 = 1,
+  K_mixture = 2,
+  J = length(unique(clean_data$subject_id)),
+  group = clean_data$subject_id,
+  X_k = model.matrix( ~ 1, data = clean_data),
+  X_lambda = model.matrix(~ 1, data = clean_data),
   # X_lambda2 = model.matrix(~ is_first_guess, data = clean_data),
   X_mixture = model.matrix(~ is_first_guess, data = clean_data)
 )
@@ -297,7 +299,7 @@ stan_data <- list(
 # Fit the model
 options(mc.cores = parallel::detectCores())
 hierarch_fit <- stan(
-  file = "3p_hierarch_weibull_censored_mixed_timedep.stan",
+  file = "very_simple_hierarch_weibull_censored_mixed_timedep.stan",
   data = stan_data,
   iter = 2000,  # Number of iterations
   chains = 4,   # Number of MCMC chains
@@ -305,15 +307,15 @@ hierarch_fit <- stan(
   # control = list(adapt_delta = 0.95, max_treedepth = 15, stepsize = 0.01)
 )
 
-traceplot(hierarch_fit, pars = c("k[1]", "lambda[1]", "lambda2[1]", "mixture_rate[1]"))
+traceplot(hierarch_fit, pars = c("k_raw", "lambda_raw", "mixture_rate_raw"))
 
 bayesplot::mcmc_areas(
   hierarch_fit,
-  pars = c("k_global"),
+  pars = c("mu_k"),
   prob = 0.9
 )
 
-posteriors <- extract(hierarch_fit, pars = c("k[1]", "lambda[1]", "lambda2[1]", "mixture_rate[1]"))
+# posteriors <- extract(hierarch_fit, pars = c("k[1]", "lambda[1]", "lambda2[1]", "mixture_rate[1]"))
 
 predicted_data <- simulate_from_predicted(clean_data, hierarch_fit, 100)
 
@@ -322,7 +324,8 @@ plot_pred_vs_actual(
   clean_data$r_check,
   clean_data$event,
   clean_data
-)
+)+
+  xlim(0, 2)
 
 
 
