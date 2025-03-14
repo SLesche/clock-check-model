@@ -197,7 +197,7 @@ clean_data <- data %>%
   mutate(
     subject_id = dense_rank(participant)
   ) %>% 
-  filter(event == 1) %>% 
+  # filter(event == 1) %>% 
   filter(!(is_first_guess == 1 & r_check < 0.1)) %>% 
   # filter(is_first_guess == 0) %>%
   ungroup() 
@@ -284,13 +284,13 @@ stan_data <- list(
   N = nrow(clean_data),
   times = clean_data$r_check,
   event = clean_data$event,
-  K_k = 1,
+  K_k = 2,
   K_lambda = 1,
   # K_lambda2 = 1,
   K_mixture = 2,
   J = length(unique(clean_data$subject_id)),
   group = clean_data$subject_id,
-  X_k = model.matrix( ~ 1, data = clean_data),
+  X_k = model.matrix( ~ r_to_target, data = clean_data),
   X_lambda = model.matrix(~ 1, data = clean_data),
   # X_lambda2 = model.matrix(~ is_first_guess, data = clean_data),
   X_mixture = model.matrix(~ is_first_guess, data = clean_data)
@@ -311,11 +311,11 @@ traceplot(hierarch_fit, pars = c("k_raw", "lambda_raw", "mixture_rate_raw"))
 
 bayesplot::mcmc_areas(
   hierarch_fit,
-  pars = c("mu_k"),
+  pars = c("mu_mixture[1]", "mu_mixture[2]"),
   prob = 0.9
 )
 
-# posteriors <- extract(hierarch_fit, pars = c("k[1]", "lambda[1]", "lambda2[1]", "mixture_rate[1]"))
+posteriors <- extract(hierarch_fit, pars = c(""))
 
 predicted_data <- simulate_from_predicted(clean_data, hierarch_fit, 100)
 
