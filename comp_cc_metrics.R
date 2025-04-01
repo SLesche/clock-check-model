@@ -184,7 +184,7 @@ plot_pred_vs_actual(
 
 ## ---- Hierarchical
 
-pred_matrix <- model.matrix( ~ 1, data = clean_data)
+pred_matrix <- model.matrix( ~ r_to_target, data = clean_data)
 
 stan_data <- list(
   N = nrow(clean_data),
@@ -213,15 +213,34 @@ hierarch_fit <- stan(
   # control = list(adapt_delta = 0.95, max_treedepth = 15, stepsize = 0.01)
 )
 
-traceplot(hierarch_fit, pars = c("k_raw", "lambda_raw", "mixture_rate_raw"))
+subject_id <- unique(clean_data$subject_id)
+subject_k <- colMeans(as.data.frame(extract(hierarch_fit, "k_raw")))
+# subject_k_eff <- colMeans(as.data.frame(extract(hierarch_fit, "k_raw")))
 
-bayesplot::mcmc_areas(
-  hierarch_fit,
-  pars = c("mu_mixture[1]", "mu_mixture[2]"),
-  prob = 0.9
+subject_lambda <- colMeans(as.data.frame(extract(hierarch_fit, "lambda_raw")))
+# subject_lambda_eff <- colMeans(as.data.frame(extract(hierarch_fit, "lambda_raw")))
+subject_g <- colMeans(as.data.frame(extract(hierarch_fit, "mixture_rate_raw")))
+# subject_g_eff <- colMeans(as.data.frame(extract(hierarch_fit, "mixture_rate_raw")))
+
+cc_metrics <- data.frame(
+  subject_id = subject_id,
+  k = subject_k[1:length(subject_id)],
+  lambda = subject_lambda[1:length(subject_id)],
+  g = subject_g[1:length(subject_id)],
+  k_effect = subject_k[(length(subject_id) + 1):(2*length(subject_id))],
+  lambda_effect = subject_lambda[(length(subject_id) + 1):(2*length(subject_id))],
+  g_effect = subject_g[(length(subject_id) + 1):(2*length(subject_id))]
 )
 
-posteriors <- extract(hierarch_fit, pars = c(""))
+# traceplot(hierarch_fit, pars = c("k_raw", "lambda_raw", "mixture_rate_raw"))
+
+# bayesplot::mcmc_areas(
+#   hierarch_fit,
+#   pars = c("mu_mixture[1]", "mu_mixture[2]"),
+#   prob = 0.9
+# )
+
+# posteriors <- extract(hierarch_fit, pars = c(""))
 
 predicted_data <- simulate_from_predicted(clean_data, hierarch_fit, 100)
 
@@ -234,15 +253,37 @@ plot_pred_vs_actual(
   xlim(0, 2)
 
 # Other metrics ----
-
-# Compute strategic clock checking
+mean_times <- clean_data %>% 
+  group_by(subject_id) %>% 
+  summarize(
+    mean_time_between_ccs = mean(time_since_last_cc, na.rm = TRUE),
+    mean_r_check = mean(r_check, na.rm = TRUE),
+    n_checks = sum(cens == 0),
+    pm_acc = mean(unique(pm_acc)),
+    pm_count = unique(pm_count)
+  )
 
 # Mean time between clock checks
 
-# Prospective memory accuracy
+# Compute strategic clock checking
+strat_check <- clean_data %>% 
+  mutate(
+    is_last_quarter = ifelse(time_since_start > 300 * 3/4, 1, 0)
+  ) %>% 
+  count(subject_id, is_last_quarter) %>% 
+  group_by(subject_id) %>% 
+  mutate(
+    strat_check = round(100*n / sum(n), 2)
+  ) %>% 
+  rename(
+    "n_checks_last_quarter" = n
+  ) %>% 
+  filter(is_last_quarter == 1)
 
-# Overall number of clock checks
+cc_compare <- cc_metrics %>% 
+  left_join(., mean_times) %>% 
+  left_join(., strat_check) 
 
-# Average r_check
-
-# Last r_check
+cc_compare %>% 
+  select(-subject_id, -is_last_quarter) %>% 
+  cor() %>% View()
