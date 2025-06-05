@@ -2,6 +2,7 @@ library(survival)
 library(ggplot2)
 library(dplyr)
 library(rstan)
+library(brms)
 
 data <- read.csv("archive/diffusion_data.csv")
 
